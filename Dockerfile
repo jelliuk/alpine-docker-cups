@@ -32,20 +32,20 @@ RUN apk update --no-cache && \
 
 # Install Splix (ML-1910 / SPL mono driver) and build foo2zjs from source
 # (foo2qpdl / QPDL colour driver for CLP-325 — not packaged in Alpine)
+# Source cloned from OpenPrinting/foo2zjs — the actively maintained mirror
 RUN apk add --no-cache \
       splix \
       --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
  && apk add --no-cache --virtual .build-deps \
       build-base \
-      ghostscript \
-      wget \
- && wget -q http://foo2zjs.rkkda.com/foo2zjs.tar.gz \
- && tar xzf foo2zjs.tar.gz \
+      git \
+      perl \
+ && git clone --depth=1 https://github.com/OpenPrinting/foo2zjs.git \
  && cd foo2zjs \
  && make \
  && make install \
  && cd .. \
- && rm -rf foo2zjs foo2zjs.tar.gz \
+ && rm -rf foo2zjs \
  && apk del .build-deps
 
 # Copy configuration files and PPDs, ensure scripts are executable
