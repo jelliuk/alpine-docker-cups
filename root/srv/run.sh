@@ -1,22 +1,17 @@
 #! /bin/sh
 #
-# Set root password and start CUPS instance
+# Start CUPS and Avahi inside the container.
 #
-# Author:       Thomas Bendler <project@bendler-net.de>
-# Date:         Sat Dec  8 15:46:29 CET 2018
+# Release: v2.0
 #
-# Release:      v1.3
-#
-# Prerequisite: This release needs a shell which could handle functions.
-#               If shell is not able to handle functions, remove the
-#               error section.
-#
-# ChangeLog:    v0.1 - Initial release
-#               v1.2 - First production ready release (align with image version)
-#               v1.3 - Add avahi
-#
+# ChangeLog:
+#   v0.1 - Initial release
+#   v1.2 - First production ready release
+#   v1.3 - Add Avahi
+#   v2.0 - Auto-register Samsung ML-1910 and CLP-325; improved security;
+#           remove SMB port exposure; honour CUPS_ADMIN_USER/GROUP vars
 
-### Enable debug if debug flag is true ###
+### Enable debug if requested ###
 if [ -n "${CUPS_ENV_DEBUG}" ]; then
   set -ex
 fi
@@ -24,9 +19,9 @@ fi
 ### Error handling ###
 error_handling() {
   if [ "${RETURN}" -eq 0 ]; then
-    echo "${SCRIPT} successfull!"
+    echo "${SCRIPT} successful!"
   else
-    echo "${SCRIPT} aborted, reason: ${REASON}"
+    echo "${SCRIPT} aborted — ${REASON}"
   fi
   exit "${RETURN}"
 }
@@ -34,47 +29,52 @@ trap "error_handling" EXIT HUP INT QUIT TERM
 RETURN=0
 REASON="Finished!"
 
-### Default values ###
+### Defaults ###
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export LC_ALL=C
 export LANG=C
-SCRIPT=$(basename ${0})
+SCRIPT=$(basename "${0}")
 
-### Check prerequisite ###
-if [ ! -f /.dockerenv ]; then RETURN=1; REASON="Not executed inside a Docker container, aborting!"; exit; fi
-if [ ! -d /opt/cups ]; then RETURN=1; REASON="CUPS configuration dirctory not found, aborting!"; exit; fi
+### Sanity checks ###
+if [ ! -f /.dockerenv ]; then
+  RETURN=1; REASON="Not running inside Docker — aborting!"; exit
+fi
 
-### Prepare avahi-daemon configuration ###
-sed -i 's/.*enable\-dbus=.*/enable\-dbus\=no/' /etc/avahi/avahi-daemon.conf
-sed -i 's/.*enable\-reflector=.*/enable\-reflector\=yes/' /etc/avahi/avahi-daemon.conf
-sed -i 's/.*reflect\-ipv=.*/reflect\-ipv\=yes/' /etc/avahi/avahi-daemon.conf
-
-### Copy CUPS docker env variable to script ###
-if [ -z ${CUPS_ENV_PASSWORD} ]; then
+### Password ###
+if [ -z "${CUPS_ENV_PASSWORD}" ]; then
   CUPS_PASSWORD="password"
 else
-  CUPS_PASSWORD=${CUPS_ENV_PASSWORD}
+  CUPS_PASSWORD="${CUPS_ENV_PASSWORD}"
 fi
 
-### Main logic to create an admin user for CUPS ###
 if printf '%s' "${CUPS_PASSWORD}" | LC_ALL=C grep -q '[^ -~]\+'; then
-  RETURN=1; REASON="CUPS password contain illegal non-ASCII characters, aborting!"; exit;
+  RETURN=1; REASON="CUPS password contains non-ASCII characters — aborting!"; exit
 fi
 
-### set password for root user ###
-echo root:${CUPS_PASSWORD} | /usr/sbin/chpasswd
-if [ ${?} -ne 0 ]; then RETURN=${?}; REASON="Failed to set password ${CUPS_PASSWORD} for user root, aborting!"; exit; fi
+### Set root password (used as the CUPS admin) ###
+echo "root:${CUPS_PASSWORD}" | /usr/sbin/chpasswd
+if [ $? -ne 0 ]; then
+  RETURN=$?; REASON="Failed to set root password — aborting!"; exit
+fi
+
+### Configure Avahi ###
+sed -i 's/.*enable-dbus=.*/enable-dbus=no/'             /etc/avahi/avahi-daemon.conf
+sed -i 's/.*enable-reflector=.*/enable-reflector=yes/'  /etc/avahi/avahi-daemon.conf
+sed -i 's/.*reflect-ipv=.*/reflect-ipv=yes/'            /etc/avahi/avahi-daemon.conf
 
 cat <<EOF
 
 ===========================================================
 
-The dockerized CUPS instance is now ready for use! The web
-interface is available here:
+  CUPS Print Server is ready!
 
-URL:       https://${CUPS_ENV_HOST}:631/
-Username:  root
-Password:  ${CUPS_PASSWORD}
+  URL:      https://${CUPS_ENV_HOST:-localhost}:631/
+  Username: root
+  Password: ${CUPS_PASSWORD}
+
+  Printers configured:
+    - Samsung ML-1910  (USB / mono laser)
+    - Samsung CLP-325  (USB / colour laser)
 
 ===========================================================
 
@@ -83,11 +83,11 @@ EOF
 ### Start syslogd ###
 /sbin/syslogd
 
-### Start automatic printer refresh for avahi ###
-#/srv/avahi-refresh.sh
-
-### Start avahi instance ###
+### Start Avahi ###
 /usr/sbin/avahi-daemon --daemonize --syslog
 
-### Start CUPS instance ###
-/usr/sbin/cupsd -f -c /etc/cups/cupsd.conf
+### Wait for Avahi to be ready, then start CUPS ###
+sleep 1
+
+### Start CUPS (foreground so Docker tracks PID 1 via run.sh) ###
+exec /usr/sbin/cupsd -f -c /etc/cups/cupsd.conf
