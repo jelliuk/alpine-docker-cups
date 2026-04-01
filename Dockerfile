@@ -30,12 +30,23 @@ RUN apk update --no-cache && \
       dbus \
       ghostscript
 
-# Install Splix (ML-1910 / SPL mono driver) from Alpine edge community
-# Install foo2zjs which provides foo2qpdl (CLP-325 QPDL colour driver)
+# Install Splix (ML-1910 / SPL mono driver) and build foo2zjs from source
+# (foo2qpdl / QPDL colour driver for CLP-325 — not packaged in Alpine)
 RUN apk add --no-cache \
       splix \
-      foo2zjs \
-      --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+      --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
+ && apk add --no-cache --virtual .build-deps \
+      build-base \
+      ghostscript \
+      wget \
+ && wget -q http://foo2zjs.rkkda.com/foo2zjs.tar.gz \
+ && tar xzf foo2zjs.tar.gz \
+ && cd foo2zjs \
+ && make \
+ && make install \
+ && cd .. \
+ && rm -rf foo2zjs foo2zjs.tar.gz \
+ && apk del .build-deps
 
 # Copy configuration files and PPDs, ensure scripts are executable
 COPY --chmod=755 root /
