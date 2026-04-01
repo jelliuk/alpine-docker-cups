@@ -2,7 +2,7 @@
 #
 # Start CUPS and Avahi inside the container.
 #
-# Release: v2.0
+# Release: v3.0
 #
 # ChangeLog:
 #   v0.1 - Initial release
@@ -10,6 +10,9 @@
 #   v1.3 - Add Avahi
 #   v2.0 - Auto-register Samsung ML-1910 and CLP-325; improved security;
 #           remove SMB port exposure; honour CUPS_ADMIN_USER/GROUP vars
+#   v3.0 - Debian Trixie Slim base; remove syslogd (not present in slim
+#           image, Docker captures stdout/stderr directly); drop redundant
+#           --syslog flag from avahi-daemon (implied by --daemonize)
 
 ### Enable debug if requested ###
 if [ -n "${CUPS_ENV_DEBUG}" ]; then
@@ -80,14 +83,12 @@ cat <<EOF
 
 EOF
 
-### Start syslogd ###
-/sbin/syslogd
-
 ### Start Avahi ###
-/usr/sbin/avahi-daemon --daemonize --syslog
+# Note: --daemonize implies --syslog; logs captured by Docker via stderr
+/usr/sbin/avahi-daemon --daemonize
 
 ### Wait for Avahi to be ready, then start CUPS ###
 sleep 1
 
-### Start CUPS (foreground so Docker tracks PID 1 via run.sh) ###
+### Start CUPS (foreground so Docker tracks the process correctly) ###
 exec /usr/sbin/cupsd -f -c /etc/cups/cupsd.conf
