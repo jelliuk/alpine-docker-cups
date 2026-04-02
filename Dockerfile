@@ -41,7 +41,7 @@ EXPOSE 631/tcp 5353/udp
 
 # Health check — confirms CUPS is answering on IPP port
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl --fail --silent --show-error \
+  CMD curl --fail --silent --output /dev/null \
        --unix-socket /run/cups/cups.sock \
        http://localhost/printers/ || exit 1
 
