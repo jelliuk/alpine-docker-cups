@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       avahi-daemon \
       inotify-tools \
       ghostscript \
+      curl \
       printer-driver-foo2zjs \
       printer-driver-splix \
  && rm -rf /var/lib/apt/lists/*
