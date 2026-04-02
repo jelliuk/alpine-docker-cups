@@ -41,7 +41,7 @@ EXPOSE 631/tcp 5353/udp
 
 # Health check — confirms CUPS is answering on IPP port
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -fso /dev/null http://localhost:631/ || exit 1
+  CMD curl -fs -o /dev/null http://localhost:631/ || exit 1
 
 # Start CUPS instance
 CMD ["/srv/run.sh"]
