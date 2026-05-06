@@ -1,4 +1,4 @@
-# CUPS Docker Container
+# CUPS Docker Container 🖨️
 **A robust containerized solution for running CUPS with built-in Bonjour/Avahi support.**
 
 [![Docker](https://github.com/jelliuk/alpine-docker-cups/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/jelliuk/alpine-docker-cups/actions/workflows/docker-publish.yml) [![License](https://img.shields.io/badge/License-GNU_GPLv3-blue)](#license)
