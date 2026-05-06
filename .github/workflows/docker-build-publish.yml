@@ -75,7 +75,7 @@ jobs:
         id: publish
         run: |
           # Retrieve the calculated tags list
-          TAGS=${{ steps.tag_calc.outputs.Calculated Tags }}
+          TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
           
           # Convert space-separated string to a bash array for safe looping
           IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
