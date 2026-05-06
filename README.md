@@ -4,7 +4,7 @@
 
 This is a Docker image to run a CUPS instance with built in Apples zeroconf support.
 
-This Docker image is based on the offical [Alpine](https://hub.docker.com/r/_/alpine/) image.
+This Docker image is based on the offical [Debian Trixi Slim](https://hub.docker.com/_/debian/) image.
 
 #### Table of Contents
 
