@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ${{ github.repository }}
+      
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -38,11 +39,9 @@ jobs:
           TAGS="$SHA $VERSION_TAG"
 
           # 2. Conditional Tagging Logic (Checks for 'main' OR 'master')
-          IS_MAIN=false
           if [ "$BRANCH" == "main" ] || [ "$BRANCH" == "master" ]; then
             TAGS+=" latest" # Always tag main/master as 'latest'
             echo "Added 'latest' tag for ${BRANCH} branch."
-            IS_MAIN=true
           fi
 
           if [ "$BRANCH" == "development" ]; then
@@ -50,11 +49,10 @@ jobs:
             echo "Added 'dev' tag for development branch."
           fi
           
-          # 3. Output the final space-separated list of tags using correct output syntax
+          # Output the final space-separated list of tags using correct output syntax
           echo "calculated_tags=${TAGS}" >> $GITHUB_OUTPUT
 
-      # --- Docker Build and Publish Steps ---
-      
+      # --- Docker Build Step ---
       - name: Login to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -62,8 +60,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Publish Docker Images
-        id: publish
+      - name: Build Docker Images
+        id: build
         run: |
           # Retrieve the calculated tags list using the correct output key
           TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
@@ -73,17 +71,26 @@ jobs:
 
           IMAGE_FULL=ghcr.io/${{ env.IMAGE_NAME }}
 
-          echo "Starting build and publish process using the following tags:"
+          echo "Starting build process using the following tags:"
           for tag in "${TAG_ARRAY[@]}"; do
-            echo "  -> Processing tag: $tag"
+            echo "  -> Building tag: $tag"
             # Build and automatically apply all calculated tags simultaneously
             docker build -t "$IMAGE_FULL:$tag" .
           done
+
+      # --- Docker Publish Step ---
+      - name: Publish Docker Images to GHCR
+        run: |
+          # Retrieve the calculated tags list using the correct output key
+          TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
           
-          echo ""
-          echo "--- PUSHING ALL IMAGES ---"
+          # Convert space-separated string to a bash array for safe looping
+          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+
+          echo "Starting publish process..."
 
           for tag in "${TAG_ARRAY[@]}"; do
+            echo "  -> Pushing tag: $tag"
             # Push the image for the current tag
             docker push ghcr.io/${{ env.IMAGE_NAME }}:$tag
           done
