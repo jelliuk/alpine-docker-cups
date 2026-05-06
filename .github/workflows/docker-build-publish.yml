@@ -23,43 +23,44 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      # --- Tag Calculation Logic & Environment Constraint Check ---
+    # --- Tag Calculation Logic & Environment Constraint Check ---
       - name: Determine Branch, Build Number, and Tags
         id: tag_calc
         run: |
-          BRANCH=${{ github.ref_name }}
-          SHA=${{ github.sha }}
-          BUILD_NUM=${{ github.run_number }}
-
-          # 1. Calculate the date/version tag
+          set -e
+          BRANCH="${{ github.ref_name }}"
+          SHA="${{ github.sha }}"
+          BUILD_NUM="${{ github.run_number }}"
+      
+          # Calculate the date/version tag
           DATE=$(date -u +%Y-%m-%d)
           VERSION_TAG="${DATE}-v${BUILD_NUM}"
           
-          # Initialize array of tags, always includes SHA and Date/Version tag
-          TAGS="$SHA $VERSION_TAG"
-
-          # 2. Conditional Tagging Logic (Checks for 'main' OR 'master')
-          if [ "$BRANCH" == "main" ] || [ "$BRANCH" == "master" ]; then
-            TAGS+=" latest" # Always tag main/master as 'latest'
+          # Initialize array of tags
+          TAGS="${SHA} ${VERSION_TAG}"
+      
+          # Conditional Tagging Logic
+          if [ "${BRANCH}" = "main" ] || [ "${BRANCH}" = "master" ]; then
+            TAGS="${TAGS} latest"
             echo "Added 'latest' tag for ${BRANCH} branch."
           fi
-
-          if [ "$BRANCH" == "development" ]; then
-            TAGS+=" dev" # Always tag development as 'dev'
+      
+          if [ "${BRANCH}" = "development" ]; then
+            TAGS="${TAGS} dev"
             echo "Added 'dev' tag for development branch."
           fi
           
-          # Output the final space-separated list of tags using correct output syntax
-          echo "calculated_tags=${TAGS}" >> $GITHUB_OUTPUT
-
-      # --- Docker Build Step ---
-      - name: Login to GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+          # Output the final space-separated list of tags
+          echo "calculated_tags=${TAGS}" >> "$GITHUB_OUTPUT"
+      
+            # --- Docker Build Step ---
+            - name: Login to GitHub Container Registry (GHCR)
+              uses: docker/login-action@v3
+              with:
+                registry: ghcr.io
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+  
       - name: Build Docker Images
         id: build
         run: |
