@@ -1,7 +1,7 @@
 # CUPS Docker Container 🖨️
 **A robust containerized solution for running CUPS with built-in Bonjour/Avahi support.**
 
-[![Docker](https://github.com/jelliuk/alpine-docker-cups/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/jelliuk/alpine-docker-cups/actions/workflows/docker-publish.yml) [![License](https://img.shields.io/badge/License-GNU_GPLv3-blue)](#license)
+[![Docker](https://github.com/jelliuk/docker-cups/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-publish.yml) [![License](https://img.shields.io/badge/License-GNU_GPLv3-blue)](#license)
 
 This image provides a fully containerized Print Services Unit (CUPS) instance, simplifying deployment on modern Linux systems. It is built upon Debian Trixie Slim and includes native support for Bonjour discovery via Avahi, along with pre-configured drivers for common professional devices like the Samsung ML-1910 and CLP325 Laser Printers.
 
@@ -26,7 +26,7 @@ We recommend using a start script to initialize the environment and secure the i
 
 1. **Get the Start Script:**
    ```bash
-   wget https://raw.githubusercontent.com/jelliuk/alpine-docker-cups/master/start_cups.sh
+   wget https://raw.githubusercontent.com/jelliuk/docker-cups/master/start_cups.sh
    chmod 755 start_cups.sh
    ```
 
