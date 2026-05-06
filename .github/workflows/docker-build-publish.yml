@@ -1,4 +1,6 @@
 name: Docker Build and Publish
+# Renaming the file/workflow is good practice
+# We are assuming the user wants this logic for both main and development environments.
 
 on:
   # --- Scheduled Builds (Environment Specific) ---
@@ -17,21 +19,21 @@ jobs:
   build_and_publish:
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: ${{ github.repository }} # Using repository name as default image source
       
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-    # --- Tag Calculation Logic & Environment Constraint Check ---
+      # --- Tag Calculation Logic & Environment Constraint Check ---
       - name: Determine Branch, Build Number, and Tags
         id: tag_calc
         run: |
-          set -e
+          set -e # Ensures the script fails immediately on any command failure
           BRANCH="${{ github.ref_name }}"
           SHA="${{ github.sha }}"
           BUILD_NUM="${{ github.run_number }}"
-      
+
           # Calculate the date/version tag
           DATE=$(date -u +%Y-%m-%d)
           VERSION_TAG="${DATE}-v${BUILD_NUM}"
@@ -39,7 +41,7 @@ jobs:
           # Initialize array of tags
           TAGS="${SHA} ${VERSION_TAG}"
       
-          # Conditional Tagging Logic
+          # Conditional Tagging Logic (Checks for 'main' OR 'master')
           if [ "${BRANCH}" = "main" ] || [ "${BRANCH}" = "master" ]; then
             TAGS="${TAGS} latest"
             echo "Added 'latest' tag for ${BRANCH} branch."
@@ -52,15 +54,15 @@ jobs:
           
           # Output the final space-separated list of tags
           echo "calculated_tags=${TAGS}" >> "$GITHUB_OUTPUT"
-      
-            # --- Docker Build Step ---
-            - name: Login to GitHub Container Registry (GHCR)
-              uses: docker/login-action@v3
-              with:
-                registry: ghcr.io
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
-  
+
+      # --- Docker Build Step (Correctly indented under job) ---
+      - name: Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Docker Images
         id: build
         run: |
@@ -71,7 +73,6 @@ jobs:
           IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
 
           IMAGE_FULL=ghcr.io/${{ env.IMAGE_NAME }}
-
           echo "Starting build process using the following tags:"
           for tag in "${TAG_ARRAY[@]}"; do
             echo "  -> Building tag: $tag"
@@ -79,7 +80,7 @@ jobs:
             docker build -t "$IMAGE_FULL:$tag" .
           done
 
-      # --- Docker Publish Step ---
+      # --- Docker Publish Step (Correctly indented under job) ---
       - name: Publish Docker Images to GHCR
         run: |
           # Retrieve the calculated tags list using the correct output key
@@ -89,7 +90,6 @@ jobs:
           IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
 
           echo "Starting publish process..."
-
           for tag in "${TAG_ARRAY[@]}"; do
             echo "  -> Pushing tag: $tag"
             # Push the image for the current tag
