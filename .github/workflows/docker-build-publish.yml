@@ -1,9 +1,11 @@
 name: Docker Build and Publish
+
 on:
-  # --- Scheduled Builds (Environment Specific) ---
   schedule:
-    # Weekly Development Build: Runs every Monday at midnight UTC
-    - cron: '0 0 * * 1' # Monday is day 1
+    # Monthly "latest" build from master: 1st of every month at midnight UTC
+    - cron: '0 0 1 * *'
+    # Weekly "dev" build from development: every Monday at midnight UTC
+    - cron: '0 0 * * 1'
   workflow_dispatch:
     inputs:
       triggerType:
@@ -11,49 +13,74 @@ on:
         required: true
         type: choice
         options: ['Ad-Hoc Test', 'Scheduled']
+      ref:
+        description: 'Branch to build (for Ad-Hoc)'
+        required: false
+        default: 'development'
 
 jobs:
   build_and_publish:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
     env:
-      # Define the image name used for all tags (MUST BE REPLACED)
-      IMAGE_NAME: ${{ github.repository }} 
-      
+      IMAGE_NAME: ${{ github.repository }}
+
     steps:
+      - name: Determine target branch from schedule
+        id: branch_select
+        run: |
+          # Monthly cron (1st of month) → master; Weekly cron (Monday) → development
+          # workflow_dispatch uses the 'ref' input
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            TARGET_BRANCH="${{ github.event.inputs.ref }}"
+          elif [ "$EVENT" = "schedule" ]; then
+            # Distinguish monthly vs weekly by day-of-month
+            DOM=$(date -u +%d)
+            if [ "$DOM" = "01" ]; then
+              TARGET_BRANCH="master"
+            else
+              TARGET_BRANCH="development"
+            fi
+          else
+            TARGET_BRANCH="${{ github.ref_name }}"
+          fi
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch_select.outputs.target_branch }}
 
-      # --- Tag Calculation Logic & Environment Constraint Check ---
       - name: Determine Branch, Build Number, and Tags
         id: tag_calc
         run: |
-          set -e 
-          BRANCH="${{ github.ref_name }}"
+          set -e
+          BRANCH="${{ steps.branch_select.outputs.target_branch }}"
           SHA="${{ github.sha }}"
           BUILD_NUM="${{ github.run_number }}"
-
-          # Calculate the date/version tag
           DATE=$(date -u +%Y-%m-%d)
           VERSION_TAG="${DATE}-v${BUILD_NUM}"
-          
-          # Initialize array of tags
+
+          # Always tag with immutable SHA and version tag
           TAGS="${SHA} ${VERSION_TAG}"
-      
-          # Conditional Tagging Logic (Checks for 'main' OR 'master')
+
           if [ "${BRANCH}" = "main" ] || [ "${BRANCH}" = "master" ]; then
             TAGS="${TAGS} latest"
             echo "Added 'latest' tag for ${BRANCH} branch."
           fi
-      
+
           if [ "${BRANCH}" = "development" ]; then
             TAGS="${TAGS} dev"
             echo "Added 'dev' tag for development branch."
           fi
-          
-          # Output the final space-separated list of tags
+
           echo "calculated_tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
-      # --- Docker Build Step (Login is a prerequisite) ---
       - name: Login to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -64,32 +91,25 @@ jobs:
       - name: Build Docker Images
         id: build
         run: |
-          # Retrieve the calculated tags list using the correct output key
-          TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
-          
-          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+          TAGS="${{ steps.tag_calc.outputs.calculated_tags }}"
 
-          IMAGE_FULL=ghcr.io/${{ env.IMAGE_NAME }}
+          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+          IMAGE_FULL="ghcr.io/${{ env.IMAGE_NAME }}"
           echo "Starting build process using the following tags:"
-          
-          # Using a standard C-style for loop with robust quoting
+
           for tag in "${TAG_ARRAY[@]}"; do
             echo "  -> Building tag: $tag"
-            docker build -t "$IMAGE_FULL:$tag" .
+            docker build -t "${IMAGE_FULL}:${tag}" .
           done
 
-      # --- Docker Publish Step ---
       - name: Publish Docker Images to GHCR
         run: |
-          # Retrieve the calculated tags list using the correct output key
-          TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
-          
-          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+          TAGS="${{ steps.tag_calc.outputs.calculated_tags }}"
 
+          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
           echo "Starting publish process..."
-          
-          # Using a standard C-style for loop with robust quoting
+
           for tag in "${TAG_ARRAY[@]}"; do
             echo "  -> Pushing tag: $tag"
-            docker push ghcr.io/${{ env.IMAGE_NAME }}:$tag
+            docker push "ghcr.io/${{ env.IMAGE_NAME }}:${tag}"
           done
