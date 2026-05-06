@@ -1,7 +1,4 @@
 name: Docker Build and Publish
-# Renaming the file/workflow is good practice
-# We are assuming the user wants this logic for both main and development environments.
-
 on:
   # --- Scheduled Builds (Environment Specific) ---
   schedule:
@@ -19,7 +16,8 @@ jobs:
   build_and_publish:
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: ${{ github.repository }} # Using repository name as default image source
+      # Define the image name used for all tags (MUST BE REPLACED)
+      IMAGE_NAME: ${{ github.repository }} 
       
     steps:
       - name: Checkout repository code
@@ -29,7 +27,7 @@ jobs:
       - name: Determine Branch, Build Number, and Tags
         id: tag_calc
         run: |
-          set -e # Ensures the script fails immediately on any command failure
+          set -e 
           BRANCH="${{ github.ref_name }}"
           SHA="${{ github.sha }}"
           BUILD_NUM="${{ github.run_number }}"
@@ -55,7 +53,7 @@ jobs:
           # Output the final space-separated list of tags
           echo "calculated_tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
-      # --- Docker Build Step (Correctly indented under job) ---
+      # --- Docker Build Step ---
       - name: Login to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -69,29 +67,29 @@ jobs:
           # Retrieve the calculated tags list using the correct output key
           TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
           
-          # Convert space-separated string to a bash array for safe looping
           IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
 
           IMAGE_FULL=ghcr.io/${{ env.IMAGE_NAME }}
           echo "Starting build process using the following tags:"
-          for tag in "${TAG_ARRAY[@]}"; do
+          
+          # Using a subshell and printf/xargs pattern for safe loop execution
+          printf "%s\n" "${TAG_ARRAY[@]}" | while IFS= read -r tag; do
             echo "  -> Building tag: $tag"
-            # Build and automatically apply all calculated tags simultaneously
             docker build -t "$IMAGE_FULL:$tag" .
           done
 
-      # --- Docker Publish Step (Correctly indented under job) ---
+      # --- Docker Publish Step ---
       - name: Publish Docker Images to GHCR
         run: |
           # Retrieve the calculated tags list using the correct output key
           TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
           
-          # Convert space-separated string to a bash array for safe looping
           IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
 
           echo "Starting publish process..."
-          for tag in "${TAG_ARRAY[@]}"; do
+          
+          # Using a subshell and printf/xargs pattern for safe loop execution
+          printf "%s\n" "${TAG_ARRAY[@]}" | while IFS= read -r tag; do
             echo "  -> Pushing tag: $tag"
-            # Push the image for the current tag
             docker push ghcr.io/${{ env.IMAGE_NAME }}:$tag
           done
