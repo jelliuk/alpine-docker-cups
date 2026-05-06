@@ -18,7 +18,7 @@ Ensure you have [Docker](https://docs.docker.com/engine/installation/) installed
 Download the latest stable build from GHCR:
 
 ```bash
-docker pull ghcr.io/jelliuk/alpine-docker-cups:master
+docker pull ghcr.io/jelliuk/docker-cups:master
 ```
 
 #### Step 3: Run the Container Instance
@@ -98,9 +98,9 @@ exit # Exit the container shell when done
 If you require a custom build or wish to contribute changes, clone the repository and compile locally:
 
 ```bash
-git clone https://github.com/jelliuk/alpine-docker-cups.git
+git clone https://github.com/jelliuk/docker-cups.git
 cd docker-cups
-docker build --rm --no-cache -t ghcr.io/jelliuk/alpine-docker-cups:master .
+docker build --rm --no-cache -t ghcr.io/jelliuk/docker-cups:master .
 ```
 
 ***
@@ -110,7 +110,7 @@ docker build --rm --no-cache -t ghcr.io/jelliuk/alpine-docker-cups:master .
 *   **Default Credentials:** The initial print server credentials are `root` / `password`. **Always set the `CUPS_ENV_PASSWORD` environment variable to change this password.**
 *   **Updating:** To pull the latest changes or patch versions, simply re-run:
     ```bash
-    docker pull ghcr.io/jelliuk/alpine-docker-cups:master
+    docker pull ghcr.io/jelliuk/docker-cups:master
     ```
 
 ### ⚙️ Technical Specifications & Networking
