@@ -121,4 +121,3 @@ docker build --rm --no-cache -t ghcr.io/jelliuk/docker-cups:master .
     *   `5353/udp`: Mandatory Multicast DNS (mDNS) / Avahi port, enabling Bonjour discovery on the local network.
 *   **Dependencies:** The container includes core packages such as `cups`, `avahi-daemon`, `ghostscript`, and specialized drivers (`printer-driver-foo2zjs`, `printer-driver-splix`).
 *   **Development Status:** This image is maintained for personal use only. While usage is welcomed, dedicated user support cannot be provided due to time constraints.
-```
