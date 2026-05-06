@@ -1,47 +1,49 @@
-FROM alpine:latest
+FROM debian:trixie-slim
+
 #
 # BUILD:
-#   wget https://raw.githubusercontent.com/thbe/docker-cups/master/Dockerfile
-#   docker build --rm --no-cache -t thbe/cups .
+#   docker build --rm --no-cache -t mycups .
 #
 # USAGE:
-#   wget https://raw.githubusercontent.com/thbe/docker-cups/master/start_cups.sh
 #   ./start_cups.sh
 #
 
 # Set metadata
 LABEL author="thbe - https://github.com/thbe"
 LABEL maintainer="jelliuk - https://github.com/jelliuk"
-LABEL version="2.0"
-LABEL description="Creates an Alpine container serving a CUPS instance accessible through airplay as well"
+LABEL version="4.0"
+LABEL description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support"
 
 # Set environment
-ENV LANG en_US.UTF-8
-ENV TERM xterm
+ENV LANG=en_GB.UTF-8
+ENV TERM=xterm
 
-# Set workdir
-WORKDIR /opt/cups
+# Install CUPS, Avahi, driver dependencies, and netcat for health check
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cups \
+      cups-filters \
+      avahi-daemon \
+      inotify-tools \
+      ghostscript \
+      curl \
+      printer-driver-foo2zjs \
+      printer-driver-splix \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install CUPS/AVAHI
-RUN apk update --no-cache && apk add --no-cache cups cups-filters avahi inotify-tools
-
-# Install Splix Drivers for Samsung Printers
-RUN apk add --no-cache splix --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
-
-# Copy configuration files
+# Copy configuration files and PPDs
 COPY root /
 
-# Prepare CUPS container
+# Ensure only scripts are executable
 RUN chmod 755 /srv/run.sh
 
-# Expose SMB printer sharing
-EXPOSE 137/udp 139/tcp 445/tcp
+# Expose IPP printer sharing and mDNS / Avahi advertisement
+EXPOSE 631/tcp 5353/udp
 
-# Expose IPP printer sharing
-EXPOSE 631/tcp
-
-# Expose avahi advertisement
-EXPOSE 5353/udp
+# Health check — confirms CUPS is answering on IPP port
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl --fail --silent --output /dev/null \
+       --unix-socket /run/cups/cups.sock \
+       http://localhost/printers/ || exit 1
 
 # Start CUPS instance
 CMD ["/srv/run.sh"]

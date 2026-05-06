@@ -1,0 +1,21 @@
+<?xml version="1.0" ?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">AirPrint Samsung_CLP-325 @ %h</name>
+  <service>
+    <type>_ipp._tcp</type>
+    <subtype>_universal._sub._ipp._tcp</subtype>
+    <port>631</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>qtotal=1</txt-record>
+    <txt-record>Transparent=T</txt-record>
+    <txt-record>URF=none</txt-record>
+    <txt-record>rp=printers/Samsung_CLP-325</txt-record>
+    <txt-record>note=Samsung CLP-325 Colour Laser</txt-record>
+    <txt-record>product=(Samsung CLP-320 Series)</txt-record>
+    <txt-record>printer-state=3</txt-record>
+    <txt-record>printer-type=0xC0900C</txt-record>
+    <txt-record>Color=T</txt-record>
+    <txt-record>pdl=application/octet-stream,application/pdf,application/postscript,application/vnd.cups-raster,image/jpeg,image/png,image/tiff,text/plain</txt-record>
+  </service>
+</service-group>

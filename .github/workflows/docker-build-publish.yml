@@ -1,0 +1,98 @@
+name: Docker Build and Publish
+
+on:
+  # --- Scheduled Builds (Environment Specific) ---
+  schedule:
+    # Weekly Development Build: Runs every Monday at midnight UTC
+    - cron: '0 0 * * 1' # Monday is day 1
+  workflow_dispatch:
+    inputs:
+      triggerType:
+        description: 'Trigger Type'
+        required: true
+        type: choice
+        options: ['Ad-Hoc Test', 'Scheduled']
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+    
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      # --- Tag Calculation Logic & Environment Constraint Check ---
+      - name: Determine Branch, Build Number, and Tags
+        id: tag_calc
+        run: |
+          BRANCH=${{ github.ref_name }}
+          SHA=${{ github.sha }}
+          BUILD_NUM=${{ github.run_number }}
+
+          # 1. Calculate the date/version tag using the robust method provided
+          DATE=$(date -u +%Y-%m-%d)
+          VERSION_TAG="${DATE}-v${BUILD_NUM}"
+          
+          # Initialize array of tags, always includes SHA and Date/Version tag
+          TAGS="$SHA $VERSION_TAG"
+
+          echo "Detected Branch: $BRANCH" >> $GITHUB_OUTPUT
+          echo "Calculated Version Tag: $VERSION_TAG" >> $GITHUB_OUTPUT
+
+          # 2. Conditional Tagging Logic (Based on branch)
+          
+          # Case A: Main/Master (Monthly Schedule or Ad-Hoc Trigger)
+          if [ "$BRANCH" == "main" ]; then
+            TAGS+=" latest" # Always tag main as 'latest'
+            echo "Added 'latest' tag for main branch."
+
+            # NOTE: The schedule cron only runs on Main/Master if triggered by a push to Main/Master.
+            # If the scheduler hits this job, we proceed with tagging.
+          fi
+
+          # Case B: Development (Weekly Schedule or Ad-Hoc Trigger)
+          if [ "$BRANCH" == "development" ]; then
+            TAGS+=" dev" # Always tag development as 'dev'
+            echo "Added 'dev' tag for development branch."
+          fi
+          
+          # Export the final space-separated list of tags 
+          echo "Calculated Tags: ${TAGS}" >> $GITHUB_OUTPUT
+
+
+      # --- Docker Build and Publish Steps ---
+      
+      - name: Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Publish Docker Images
+        id: publish
+        run: |
+          # Retrieve the calculated tags list
+          TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
+          
+          # Convert space-separated string to a bash array for safe looping
+          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+
+          IMAGE_FULL=ghcr.io/${{ env.IMAGE_NAME }}
+
+          echo "Starting build and publish process using the following tags:"
+          for tag in "${TAG_ARRAY[@]}"; do
+            echo "  -> Processing tag: $tag"
+            # Build and automatically apply all calculated tags simultaneously
+            docker build -t "$IMAGE_FULL:$tag" .
+          done
+          
+          echo ""
+          echo "--- PUSHING ALL IMAGES ---"
+
+          for tag in "${TAG_ARRAY[@]}"; do
+            # Push the image for the current tag
+            docker push ghcr.io/${{ env.IMAGE_NAME }}:$tag
+          done

@@ -8,27 +8,15 @@ name: Docker-Dev
 on:
   push:
     branches: [ "development" ]
-    # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
     paths-ignore:
       - README.md
-      - CHANGELOG.md # Should never be edited anyway
-      - LICENSE.md # Should never be edited anyway
+      - CHANGELOG.md
+      - LICENSE.md
       - .gitignore
       - .github/**
-  pull_request:
-    branches: [ "development" ]
-    paths-ignore:
-      - README.md
-      - CHANGELOG.md # Should never be edited anyway
-      - LICENSE.md # Should never be edited anyway
-      - .gitignore
-      - .github/**
-      
 env:
-  # Use docker.io for Docker Hub if empty
   REGISTRY: ghcr.io
-  # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -38,70 +26,55 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
       id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      # Install the cosign tool except on PR
-      # https://github.com/sigstore/cosign-installer
-      - name: Install Cosgin
-        if: github.event_name != 'pull_request'
-        #try using main
+      - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.1
 
       - name: Setup Docker buildx
-      # try default buildx action v2
         uses: docker/setup-buildx-action@v4.0.0
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v4.0.0
         
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
-        #try with login-actionv2
         uses: docker/login-action@v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
-        #try with metadata-action v4
         uses: docker/metadata-action@v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Produces two tags on every development push:
+          #   ghcr.io/jelliuk/alpine-docker-cups:development  (stable, overwritten each push)
+          #   ghcr.io/jelliuk/alpine-docker-cups:dev-a1b2c3f  (immutable per commit)
+          tags: |
+            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
+            type=sha,prefix=dev-,format=short
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        # try default build and push action v3
         uses: docker/build-push-action@v7.1.0
         with:
           context: .
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Sign the resulting Docker image digest except on PRs.
-      # This will only write to the public Rekor transparency log when the Docker
-      # repository is public to avoid leaking data.  If you would like to publish
-      # transparency data even for private images, pass --force to cosign below.
-      # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
         env:
-          COSIGN_EXPERIMENTAL: "true"
-          TAGS: ${{ steps.docker_meta.outputs.tags }}
-        # This step uses the identity token to provision an ephemeral certificate
-        # against the sigstore community Fulcio instance.
-        #Option 2
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: echo "$TAGS" | xargs -I {} cosign sign --yes {}@${{ steps.build-and-push.outputs.digest }}

@@ -1,29 +1,30 @@
 #! /bin/sh
 #
-# Start docker image that provides a CUPS instance
+# Launch the dockerized CUPS print server.
 #
-# Author:       Thomas Bendler <project@bendler-net.de>
-# Date:         Sat Dec  8 15:46:29 CET 2018
-#
-# Release:      v1.3
-#
-# ChangeLog:    v0.1 - Initial release
-#               v1.2 - First production ready release (align with image version)
-#               v1.3 - Add avahi
+# Usage:
+#   export CUPS_PASSWORD='MySeCret!'   # optional — defaults to "password"
+#   export CUPS_DEBUG=1                # optional — enables verbose logging
+#   ./start_cups.sh
 #
 
-### Set standard password if not set with local environment variable ###
-if [ -n "${CUPS_PASSWORD}" ]; then
-  CUPS_PASSWORD=password
+### Default password guard (note: original script had the condition inverted) ###
+if [ -z "${CUPS_PASSWORD}" ]; then
+  CUPS_PASSWORD="password"
 fi
 
-### Run docker instance ###
-docker run --detach --restart always \
-  --cap-add=SYS_ADMIN -e "container=docker" \
-  -e CUPS_ENV_HOST="$(hostname -f)" \
+### Resolve host FQDN ###
+CUPS_HOST="$(hostname -f 2>/dev/null || hostname)"
+CUPS_DOMAIN="$(echo "${CUPS_HOST}" | sed -e 's/^[^.]*\.//')"
+
+docker run --detach --restart unless-stopped \
+  --cap-add=SYS_ADMIN \
+  -e CUPS_ENV_HOST="${CUPS_HOST}" \
   -e CUPS_ENV_PASSWORD="${CUPS_PASSWORD}" \
   -e CUPS_ENV_DEBUG="${CUPS_DEBUG}" \
-  --name cups --hostname cups.$(hostname -f | sed -e 's/^[^.]*\.//') \
-  -p 137:137/udp -p 139:139/tcp -p 445:445/tcp \
-  -p 631:631/tcp -p 5353:5353/udp \
-  thbe/cups
+  --name cups \
+  --hostname "cups.${CUPS_DOMAIN}" \
+  -p 631:631/tcp \
+  -p 5353:5353/udp \
+  -v cups-config:/etc/cups \
+  mycups
