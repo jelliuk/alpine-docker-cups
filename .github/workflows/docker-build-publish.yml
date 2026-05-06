@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ${{ github.repository }}
-    
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -31,36 +30,28 @@ jobs:
           SHA=${{ github.sha }}
           BUILD_NUM=${{ github.run_number }}
 
-          # 1. Calculate the date/version tag using the robust method provided
+          # 1. Calculate the date/version tag
           DATE=$(date -u +%Y-%m-%d)
           VERSION_TAG="${DATE}-v${BUILD_NUM}"
           
           # Initialize array of tags, always includes SHA and Date/Version tag
           TAGS="$SHA $VERSION_TAG"
 
-          echo "Detected Branch: $BRANCH" >> $GITHUB_OUTPUT
-          echo "Calculated Version Tag: $VERSION_TAG" >> $GITHUB_OUTPUT
-
-          # 2. Conditional Tagging Logic (Based on branch)
-          
-          # Case A: Main/Master (Monthly Schedule or Ad-Hoc Trigger)
-          if [ "$BRANCH" == "main" ]; then
-            TAGS+=" latest" # Always tag main as 'latest'
-            echo "Added 'latest' tag for main branch."
-
-            # NOTE: The schedule cron only runs on Main/Master if triggered by a push to Main/Master.
-            # If the scheduler hits this job, we proceed with tagging.
+          # 2. Conditional Tagging Logic (Checks for 'main' OR 'master')
+          IS_MAIN=false
+          if [ "$BRANCH" == "main" ] || [ "$BRANCH" == "master" ]; then
+            TAGS+=" latest" # Always tag main/master as 'latest'
+            echo "Added 'latest' tag for ${BRANCH} branch."
+            IS_MAIN=true
           fi
 
-          # Case B: Development (Weekly Schedule or Ad-Hoc Trigger)
           if [ "$BRANCH" == "development" ]; then
             TAGS+=" dev" # Always tag development as 'dev'
             echo "Added 'dev' tag for development branch."
           fi
           
-          # Export the final space-separated list of tags 
-          echo "Calculated Tags: ${TAGS}" >> $GITHUB_OUTPUT
-
+          # 3. Output the final space-separated list of tags using correct output syntax
+          echo "calculated_tags=${TAGS}" >> $GITHUB_OUTPUT
 
       # --- Docker Build and Publish Steps ---
       
@@ -74,7 +65,7 @@ jobs:
       - name: Build and Publish Docker Images
         id: publish
         run: |
-          # Retrieve the calculated tags list
+          # Retrieve the calculated tags list using the correct output key
           TAGS=${{ steps.tag_calc.outputs.calculated_tags }}
           
           # Convert space-separated string to a bash array for safe looping
