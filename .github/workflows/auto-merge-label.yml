@@ -20,6 +20,7 @@ jobs:
   automerge:
     runs-on: ubuntu-latest
     steps:
+<<<<<<< HEAD
       - name: Checkout repository
         id: auto-merge
         uses: actions/checkout@v6.0.2
@@ -32,3 +33,13 @@ jobs:
           # GITHUB_TOKEN cannot merge PRs that touch workflow files.
           GITHUB_TOKEN: "${{ secrets.WORKFLOW_SECRET }}"
           MERGE_LABELS: "auto-merge"
+=======
+      -  name: Checkout repository
+         uses: actions/checkout@v6.0.2
+         id: auto-merge
+      -  name: auto-merge
+         uses: "pascalgn/automerge-action@v0.16.4"
+         env:
+           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+           MERGE_LABELS: "auto-merge"
+>>>>>>> 6826b762fdd8f6c3744c3280cb099b8085234244
