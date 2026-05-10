@@ -28,4 +28,4 @@ jobs:
           pull_request_branch: "development"
           pull_request_title: "chore: update GitHub Actions versions"
           pull_request_labels: "auto-merge"
-          update_version_with: "latest_release_tag"
+          update_version_with: "release-tag"
