@@ -14,3 +14,17 @@ updates:
       prefix: "docker"
 
     open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+    labels:
+      - dependencies
+      - github-actions
+
+    commit-message:
+      prefix: "github-actions"
+
+    open-pull-requests-limit: 5
