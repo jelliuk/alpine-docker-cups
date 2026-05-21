@@ -1,0 +1,16 @@
+version: 2
+
+updates:
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+
+    labels:
+      - dependencies
+      - docker
+
+    commit-message:
+      prefix: "docker"
+
+    open-pull-requests-limit: 5
