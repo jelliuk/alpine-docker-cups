@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       -  name: Checkout repository
-         uses: actions/checkout@v6.0.2
+         uses: actions/checkout@v6.0.3
          id: auto-merge
       -  name: auto-merge
          uses: "pascalgn/automerge-action@v0.16.4"
