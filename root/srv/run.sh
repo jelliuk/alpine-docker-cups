@@ -19,6 +19,9 @@
 #           never started); avahi-refresh.sh now restores AirPrint
 #           service files from a pristine copy instead of deleting them
 #           and copying a now-empty directory onto itself.
+#   v4.0 - Remove avahi-refresh.sh the printers are statically defined
+#           at container build, this is needlessly complex.
+#
 
 ### Enable debug if requested ###
 if [ -n "${CUPS_ENV_DEBUG}" ]; then
@@ -95,14 +98,6 @@ EOF
 ### Start Avahi ###
 # Note: --daemonize implies --syslog; logs captured by Docker via stderr
 /usr/sbin/avahi-daemon --daemonize
-
-### Watch /etc/cups for printers.conf changes and refresh AirPrint
-### service advertisements accordingly. Backgrounded — it runs for the
-### lifetime of the container alongside cupsd.
-/srv/avahi-refresh.sh &
-
-### Wait for Avahi to be ready, then start CUPS ###
-sleep 1
 
 ### Start CUPS (foreground so Docker tracks the process correctly) ###
 exec /usr/sbin/cupsd -f -c /etc/cups/cupsd.conf
