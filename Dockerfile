@@ -9,10 +9,16 @@ FROM debian:trixie-slim@sha256:b6e2a152f22a40ff69d92cb397223c906017e1391a73c952b
 #
 
 # Set metadata
-LABEL author="thbe - https://github.com/thbe"
-LABEL maintainer="jelliuk - https://github.com/jelliuk"
-LABEL version="4.0"
-LABEL description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support"
+LABEL author="thbe - https://github.com/thbe, jelliuk <https://github.com/jelliuk>"  \
+      maintainer="jelliuk - https://github.com/jelliuk" \
+      version="4.0" \
+      description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support" \
+      org.opencontainers.image.title="docker-cups" \
+      org.opencontainers.image.description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support" \
+      org.opencontainers.image.authors="thbe <https://github.com/thbe>, jelliuk <https://github.com/jelliuk>" \
+      org.opencontainers.image.source="https://github.com/jelliuk/docker-cups" \
+      org.opencontainers.image.version="4.0" \
+      org.opencontainers.image.licenses="MIT"
 
 # Set environment
 ENV LANG=en_GB.UTF-8
@@ -28,13 +34,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       printer-driver-foo2zjs \
       printer-driver-splix \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && apt-get clean
 
-# Copy configuration files and PPDs
-COPY root /
+# Detailed Specific Copy for configuration files and PPDs
+COPY root/etc/cups               /etc/cups
+COPY root/etc/avahi/services      /etc/avahi/services
+COPY root/etc/avahi/services.dist /etc/avahi/services.dist
+COPY root/usr/share/cups/model    /usr/share/cups/model
+COPY root/srv                     /srv
 
 # Ensure only scripts are executable
-RUN chmod 755 /srv/run.sh
+RUN chmod 755 /srv/run.sh /srv/avahi-refresh.sh
 
 # Expose IPP printer sharing and mDNS / Avahi advertisement
 EXPOSE 631/tcp 5353/udp
