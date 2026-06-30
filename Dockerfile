@@ -1,13 +1,5 @@
 FROM debian:trixie-slim@sha256:b6e2a152f22a40ff69d92cb397223c906017e1391a73c952b588e51af8883bf8
 
-#
-# BUILD:
-#   docker build --rm --no-cache -t mycups .
-#
-# USAGE:
-#   ./start_cups.sh
-#
-
 # Set metadata
 LABEL author="thbe - https://github.com/thbe, jelliuk <https://github.com/jelliuk>"  \
       maintainer="jelliuk - https://github.com/jelliuk" \
@@ -29,7 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       cups \
       cups-filters \
       avahi-daemon \
-      inotify-tools \
       ghostscript \
       curl \
       printer-driver-foo2zjs \
@@ -40,12 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Detailed Specific Copy for configuration files and PPDs
 COPY root/etc/cups               /etc/cups
 COPY root/etc/avahi/services      /etc/avahi/services
-COPY root/etc/avahi/services.dist /etc/avahi/services.dist
 COPY root/usr/share/cups/model    /usr/share/cups/model
 COPY root/srv                     /srv
 
 # Ensure only scripts are executable
-RUN chmod 755 /srv/run.sh /srv/avahi-refresh.sh
+RUN chmod 755 /srv/run.sh
 
 # Expose IPP printer sharing and mDNS / Avahi advertisement
 EXPOSE 631/tcp 5353/udp
