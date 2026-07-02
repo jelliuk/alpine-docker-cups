@@ -73,7 +73,7 @@ jobs:
       # ── Tag calculation ───────────────────────────────────────────────────────
       - name: Extract Docker metadata and tags
         id: meta
-        uses: docker/metadata-action@v6.1.0
+        uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ env.IMAGE_NAME }}
           tags: |
