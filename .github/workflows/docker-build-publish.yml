@@ -95,7 +95,7 @@ jobs:
 
       # ── Trivy scanning ────────────────────────────────────────────────────────
       - name: Cache Trivy vulnerability DB
-        uses: actions/cache@v6.0.0
+        uses: actions/cache@v6.1.0
         with:
           path: ~/.cache/trivy
           key: trivy-db-${{ github.run_id }}
