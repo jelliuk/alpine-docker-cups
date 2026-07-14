@@ -8,9 +8,8 @@ This image provides a fully containerized Print Services Unit (CUPS) instance, s
 ### Build Status
 | Branch | Status |
 | --- | --- |
-|Development | [![Docker Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish.yml/badge.svg?branch=development)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish.yml) |
-|Production | [![Docker Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish.yml/badge.svg?branch=master)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish.yml)|
-
+|Development | [![Development Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-development.yml/badge.svg)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-development.yml) |
+|Production | [![Production Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-production.yml/badge.svg)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-production.yml)|
 
 ### 🚀 Quick Start Guide
 
