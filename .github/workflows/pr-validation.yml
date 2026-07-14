@@ -1,0 +1,52 @@
+name: PR Validation
+
+# Runs on every PR targeting development (Dependabot's target branch).
+# This is the check that GitHub's native auto-merge waits on — see
+# dependabot-auto-merge.yml and the branch protection rule on 'development'.
+on:
+  pull_request:
+    branches: [development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      # Build only — no push, no signing. Proves the Dockerfile/base-image
+      # bump the PR introduces still builds cleanly before it's allowed to merge.
+      - name: Build image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          load: true
+          tags: ghcr.io/${{ github.repository }}:pr-${{ github.event.pull_request.number }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Non-blocking informational scan, consistent with the rest of the
+      # pipeline — reported, never gates. The build step above is the gate.
+      - name: Scan image (informational)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:pr-${{ github.event.pull_request.number }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
