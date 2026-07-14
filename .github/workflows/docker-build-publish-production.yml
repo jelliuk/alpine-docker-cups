@@ -7,7 +7,7 @@ on:
   workflow_dispatch:  # Manual escape hatch — e.g. re-publishing prod without waiting on dev
 
 concurrency:
-  group: production-build-publish
+  group: docker-cups-build-publish   # shared with Development — never run git-writing steps concurrently
   cancel-in-progress: false
 
 jobs:
