@@ -1,5 +1,5 @@
-# Automatically merge Dependabot PRs for minor and patch updates
 name: Dependabot auto-merge
+
 on: pull_request
 
 permissions:
@@ -9,7 +9,10 @@ permissions:
 jobs:
   dependabot:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'jelliuk/docker-cups'
+    if: >
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.repository == 'jelliuk/docker-cups' &&
+      github.event.pull_request.base.ref == 'development'
     steps:
       - name: Dependabot metadata
         id: metadata

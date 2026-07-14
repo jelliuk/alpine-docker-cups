@@ -1,59 +1,46 @@
-name: Docker Build and Publish
+name: Reusable - Build, Scan & Publish
 
 on:
-  schedule:
-    - cron: '0 0 1 * *'  # Monthly: master → latest (1st of month, midnight UTC)
-    - cron: '0 0 * * 1'  # Weekly:  development → dev (Monday, midnight UTC)
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      triggerType:
-        description: 'Trigger Type'
-        required: true
-        type: choice
-        options: ['Ad-Hoc Test', 'Scheduled']
       ref:
-        description: 'Branch to build (for Ad-Hoc)'
-        required: false
-        default: 'development'
+        description: 'Branch to build and publish'
+        required: true
+        type: string
+      tag_channel:
+        description: "Floating tag to publish alongside sha/date tags (e.g. 'dev' or 'latest')"
+        required: true
+        type: string
+    outputs:
+      digest:
+        description: 'Digest of the published multi-arch image'
+        value: ${{ jobs.build_and_publish.outputs.digest }}
+
+permissions:
+  contents: read
 
 jobs:
   build_and_publish:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read         # Required for reading of Repo content
-      packages: write        # Required for package publish
-      id-token: write        # Required for Cosign OIDC keyless signing
-      security-events: write # Required for Trivy SARIF upload to Security tab
+      contents: write         # Required to commit security-findings.md back to the branch
+      packages: write         # Required for package publish
+      id-token: write         # Required for Cosign OIDC keyless signing
+      security-events: write  # Required for Trivy SARIF upload to Security tab
 
     env:
       IMAGE_NAME: ${{ github.repository }}
 
-    steps:
-      # ── Branch resolution ────────────────────────────────────────────────────
-      - name: Resolve target branch
-        id: branch_select
-        run: |
-          set -e
-          EVENT="${{ github.event_name }}"
-          if [ "$EVENT" = "workflow_dispatch" ]; then
-            echo "target_branch=${{ github.event.inputs.ref }}" >> "$GITHUB_OUTPUT"
-          elif [ "$EVENT" = "schedule" ]; then
-            DOM=$(date -u +%d)
-            if [ "$DOM" = "01" ]; then
-              echo "target_branch=master" >> "$GITHUB_OUTPUT"
-            else
-              echo "target_branch=development" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "target_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
 
+    steps:
       # ── Checkout ─────────────────────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v7.0.0
         with:
-          ref: ${{ steps.branch_select.outputs.target_branch }}
+          ref: ${{ inputs.ref }}
 
       # ── Docker setup ─────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
@@ -78,8 +65,7 @@ jobs:
           images: ghcr.io/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,format=long
-            type=raw,value=latest,enable=${{ steps.branch_select.outputs.target_branch == 'master' }}
-            type=raw,value=dev,enable=${{ steps.branch_select.outputs.target_branch == 'development' }}
+            type=raw,value=${{ inputs.tag_channel }}
             type=raw,value={{date 'YYYY-MM-DD'}}-v${{ github.run_number }}
 
       # ── Build (scan target — single platform, loaded locally for Trivy) ───────
@@ -94,6 +80,10 @@ jobs:
           cache-to: type=gha,mode=max
 
       # ── Trivy scanning ────────────────────────────────────────────────────────
+      # NOTE: Findings are reported (SARIF + job summary + security-findings.md)
+      # but are never allowed to fail the build. Each new build carries whatever
+      # fixes are available upstream at build time; anything still outstanding is
+      # documented and picked up by a future build rather than blocking release.
       - name: Cache Trivy vulnerability DB
         uses: actions/cache@v6.1.0
         with:
@@ -101,8 +91,8 @@ jobs:
           key: trivy-db-${{ github.run_id }}
           restore-keys: trivy-db-
 
-      # Scan 1: JSON format — used as the gate source (stable schema, reliable parsing)
-      - name: Scan image — JSON (gate source)
+      # Scan 1: JSON format — used as the reporting source (stable schema, reliable parsing)
+      - name: Scan image — JSON (reporting source)
         uses: aquasecurity/trivy-action@v0.36.0
         env:
           TRIVY_NO_PROGRESS: "true"
@@ -111,7 +101,7 @@ jobs:
           format: json
           output: trivy-results.json
           severity: CRITICAL,HIGH
-          exit-code: '0'       # Gate is enforced separately after all reporting
+          exit-code: '0'       # Informational only — never gates the build
           ignore-unfixed: true # Only flag vulnerabilities that have a fix available
           vuln-type: os,library
           scanners: vuln
@@ -131,17 +121,12 @@ jobs:
           vuln-type: os,library
           scanners: vuln
 
-      # Parse JSON output to count actionable findings
+      # Parse JSON output to count findings (informational — no gating)
       - name: Count vulnerabilities
         id: check
         run: |
           COUNT=$(jq '[.Results[]?.Vulnerabilities // [] | .[]] | length' trivy-results.json)
           echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
-          if [ "$COUNT" -gt 0 ]; then
-            echo "result=fail" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=pass" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Upload SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
@@ -150,7 +135,7 @@ jobs:
           sarif_file: trivy-results.sarif
           # Category scopes results per branch — prevents merged results
           # when the workflow runs concurrently across branches
-          category: trivy-container-${{ steps.branch_select.outputs.target_branch }}
+          category: trivy-container-${{ inputs.ref }}
 
       # Write a clean Markdown summary to the Action run page
       - name: Write job summary
@@ -161,16 +146,18 @@ jobs:
           echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`ghcr.io/${{ env.IMAGE_NAME }}:scan-target\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ inputs.ref }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Severity | CRITICAL, HIGH |" >> $GITHUB_STEP_SUMMARY
           echo "| Ignore unfixed | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Scope | os, library |" >> $GITHUB_STEP_SUMMARY
           echo "| Findings | ${{ steps.check.outputs.count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build gated on findings | ❌ No — see security-findings.md |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.check.outputs.result }}" = "pass" ]; then
+          if [ "${{ steps.check.outputs.count }}" = "0" ]; then
             echo "### ✅ No actionable vulnerabilities found" >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ❌ ${{ steps.check.outputs.count }} actionable vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ ${{ steps.check.outputs.count }} actionable vulnerabilities found (non-blocking)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| CVE | Package | Installed | Fixed | Severity |" >> $GITHUB_STEP_SUMMARY
             echo "|---|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
@@ -180,15 +167,48 @@ jobs:
             ' trivy-results.json >> $GITHUB_STEP_SUMMARY
           fi
 
-      # Gate: fail the build explicitly after all reporting has completed
-      - name: Fail build if vulnerabilities found
-        if: steps.check.outputs.result == 'fail'
+      # ── Persist findings to the repo instead of failing the build ────────────
+      - name: Generate security-findings.md
         run: |
-          echo "::error::Trivy found ${{ steps.check.outputs.count }} fixable HIGH/CRITICAL vulnerabilities. Review the Security tab and job summary."
-          exit 1
+          {
+            echo "# Security Findings"
+            echo
+            echo "_Auto-generated by the Reusable - Build, Scan & Publish workflow. Do not edit by hand._"
+            echo
+            echo "This file reflects the Trivy scan of the most recent build published from the"
+            echo "\`${{ inputs.ref }}\` branch. Findings here do **not** block publishing — each build"
+            echo "picks up whatever upstream fixes are available at build time, and anything still"
+            echo "outstanding is tracked here for a future build to resolve."
+            echo
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Branch | \`${{ inputs.ref }}\` |"
+            echo "| Workflow run | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Scanned | $(date -u +'%Y-%m-%d %H:%M UTC') |"
+            echo "| Severity scope | CRITICAL, HIGH (fixable only) |"
+            echo "| Findings count | ${{ steps.check.outputs.count }} |"
+            echo
+            if [ "${{ steps.check.outputs.count }}" = "0" ]; then
+              echo "✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build."
+            else
+              echo "| CVE | Package | Installed | Fixed | Severity |"
+              echo "|---|---|---|---|---|"
+              jq -r '
+                .Results[]? | .Vulnerabilities[]? |
+                "| \(.VulnerabilityID) | \(.PkgName) | \(.InstalledVersion) | \(.FixedVersion // "—") | \(.Severity) |"
+              ' trivy-results.json
+            fi
+          } > security-findings.md
+
+      - name: Commit security-findings.md
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]"
+          file_pattern: security-findings.md
+          branch: ${{ inputs.ref }}
 
       # ── Build and push (multi-platform) ──────────────────────────────────────
-      # Only runs if Trivy gate passes
       - name: Build and push (multi-platform)
         id: build
         uses: docker/build-push-action@v7.3.0

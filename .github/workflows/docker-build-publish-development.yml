@@ -1,0 +1,24 @@
+name: Development Build and Publish
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC — regular validation of the pipeline
+  push:
+    branches: [development]  # Immediate feedback on merges (incl. Dependabot auto-merges)
+  workflow_dispatch:
+
+concurrency:
+  group: development-build-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-build-scan-publish.yml
+    with:
+      ref: development
+      tag_channel: dev
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      security-events: write
