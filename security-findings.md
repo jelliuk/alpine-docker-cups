@@ -10,9 +10,9 @@ outstanding is tracked here for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29324189251](https://github.com/jelliuk/docker-cups/actions/runs/29324189251) |
-| Commit | `da391cc9bb7614499a60093f10270449703eafc7` |
-| Scanned | 2026-07-14 10:08 UTC |
+| Workflow run | [29324762710](https://github.com/jelliuk/docker-cups/actions/runs/29324762710) |
+| Commit | `6e7b95aae47d3eebfd67c35a4a0458b332d579fa` |
+| Scanned | 2026-07-14 10:17 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 0 |
 
