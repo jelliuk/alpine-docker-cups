@@ -202,7 +202,7 @@ jobs:
           } > security-findings.md
 
       - name: Commit security-findings.md
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]"
           file_pattern: security-findings.md
