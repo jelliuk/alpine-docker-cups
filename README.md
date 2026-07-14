@@ -53,8 +53,6 @@ services:
 
 volumes:
   cups_config:
-  cups_spool:
-  cups_logs:
 ```
 
 #### Step 3: Start the Service
