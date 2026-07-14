@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: development-build-publish
+  group: docker-cups-build-publish   # shared with Production — never run git-writing steps concurrently
   cancel-in-progress: false
 
 jobs:
