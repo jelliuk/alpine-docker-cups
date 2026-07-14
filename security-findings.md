@@ -10,17 +10,10 @@ outstanding is tracked here for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29322437122](https://github.com/jelliuk/docker-cups/actions/runs/29322437122) |
-| Commit | `a4036ee4ad590188ff30f7ee51368f4f7c289078` |
-| Scanned | 2026-07-14 09:38 UTC |
+| Workflow run | [29322950425](https://github.com/jelliuk/docker-cups/actions/runs/29322950425) |
+| Commit | `665704cd812f1b782e0d9d9542bdf46fb5282879` |
+| Scanned | 2026-07-14 09:48 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
-| Findings count | 6 |
+| Findings count | 0 |
 
-| CVE | Package | Installed | Fixed | Severity |
-|---|---|---|---|---|
-| CVE-2026-5773 | curl | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
-| CVE-2026-6276 | curl | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
-| CVE-2026-5773 | libcurl3t64-gnutls | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
-| CVE-2026-6276 | libcurl3t64-gnutls | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
-| CVE-2026-5773 | libcurl4t64 | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
-| CVE-2026-6276 | libcurl4t64 | 8.14.1-2+deb13u3 | 8.14.1-2+deb13u4 | HIGH |
+✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build.
