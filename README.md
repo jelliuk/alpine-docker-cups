@@ -11,6 +11,8 @@ This image provides a fully containerized Print Services Unit (CUPS) instance, s
 |Development | [![Development Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-development.yml/badge.svg)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-development.yml) |
 |Production | [![Production Build and Publish](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-production.yml/badge.svg)](https://github.com/jelliuk/docker-cups/actions/workflows/docker-build-publish-production.yml)|
 
+Production only builds and publishes after a Development run completes successfully. See [`security-findings.md`](security-findings.md) for the current, non-blocking Trivy scan results for the most recent build.
+
 ### 🚀 Quick Start Guide
 
 To get a functional CUPS server running, follow these steps:
