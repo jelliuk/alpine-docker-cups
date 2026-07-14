@@ -1,9 +1,16 @@
 # CUPS Docker Container 🖨️
 **A robust containerized solution for running CUPS with built-in Bonjour/Avahi support.**
 
-This image provides a fully containerized Print Services Unit (CUPS) instance, simplifying deployment on modern Linux systems. It is built upon Debian Trixie Slim and includes native support for Bonjour discovery via Avahi, along with pre-configured drivers for common professional devices like the Samsung ML-1910 and CLP325 Laser Printers.
+This image provides a fully containerized Print Services Unit (CUPS) instance, simplifying deployment on modern Linux systems. It is built upon Debian Trixie Slim and includes native support for Bonjour discovery via Avahi, along with pre-configured drivers for common professional devices like the Samsung ML-1910 and CLP-325 Laser Printers.
 
 ***
+
+### Features
+- CUPS print server
+- Bonjour / AirPrint discovery via Avahi
+- Built-in health checks
+- Persistent configuration and printer data
+- Samsung ML-1910 and CLP-325 driver support
 
 ### Build Status
 | Branch | Status |
@@ -17,38 +24,65 @@ Production only builds and publishes after a Development run completes successfu
 
 To get a functional CUPS server running, follow these steps:
 
-#### Step 1: Install Docker
-Ensure you have [Docker](https://docs.docker.com/engine/installation/) installed on your host machine.
+#### Step 1: Requirements
+Ensure you have [Docker](https://docs.docker.com/engine/installation/) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your host machine.
 
-#### Step 2: Pull the Image
-Download the latest stable build from GHCR:
-
+Verify installation:
 ```bash
-docker pull ghcr.io/jelliuk/docker-cups:master
+docker --version
+docker compose version
 ```
 
-#### Step 3: Run the Container Instance
-We recommend using a start script to initialize the environment and secure the instance before running it.
+#### Step 2: Create docker-compose.yml
+Create a docker-compose.yml at the appropriate location within the host machine.
 
-1. **Get the Start Script:**
-   ```bash
-   wget https://raw.githubusercontent.com/jelliuk/docker-cups/master/start_cups.sh
-   chmod 755 start_cups.sh
-   ```
+```
+services:
+  cups:
+    image: ghcr.io/jelliuk/docker-cups:latest
+    container_name: cups
+    restart: unless-stopped
+    ports:
+      - "631:631/tcp"
+      - "5353:5353/udp"
+    environment:
+      - TZ=Europe/London
+      - CUPS_ENV_PASSWORD=change_me!
+    volumes:
+      - cups_config:/etc/cups
 
-2. **Set Environment Variables (Recommended):**
-   It is strongly recommended to define an environment variable for a secure root password:
-   ```bash
-   export CUPS_ENV_PASSWORD='YourStrongPasswordHere!'
-   # Optional: Uncomment the line below if you need immediate debug logs during startup:
-   # export CUPS_ENV_DEBUG=true
-   ```
+volumes:
+  cups_config:
+  cups_spool:
+  cups_logs:
+```
 
-3. **Execute the Script:**
-   Run the initialization script to start the print server:
-   ```bash
-   ./start_cups.sh
-   ```
+#### Step 3: Start the Service
+Launch the container:
+```bash
+docker compose up -d
+```
+Verify it is running:
+```bash
+docker compose ps
+```
+Expected output:
+
+| NAME | STATUS |
+| --- | --- |
+| cups | running (healthy) |
+
+#### Step 4: Access the CUPS Web Interface
+Open your browser and navigate to:
+
+- ```http://<SERVER-IP>:631```
+
+Examples:
+
+- ```http://localhost:631```
+- ```http://192.168.1.10:631```
+
+You should now see the CUPS administration interface.
 
 ***
 
@@ -59,8 +93,6 @@ We recommend using a start script to initialize the environment and secure the i
 The start script honors the following environment variables for initial configuration:
 
 *   **`CUPS_ENV_PASSWORD`**: Defines the password for the `root` administrator account on the print server. **Recommendation:** Always set this to a strong, unique password to secure your deployment.
-*   **`CUPS_ENV_DEBUG`**: Setting this variable (e.g., `export CUPS_ENV_DEBUG=true`) will force the startup script into an extended debug mode (`set -ex`), greatly aiding troubleshooting connectivity or configuration problems.
-*   **`CUPS_ENV_HOST`**: Allows you to specify a custom hostname for the service URL, which is useful when deploying behind specific DNS records or local networks.
 
 #### Monitoring Server Status (Logs)
 
@@ -75,7 +107,7 @@ docker logs --tail 1000 --follow --timestamps cups
 The container provides its own healthcheck, this is silent within the docker logs and verifies that CUPS is active on its primary port, you can check the health status using a command similar to:
 
 ```bash
-curl --fail --silent http://localhost:631/printers/
+curl --fail --silent http://<SERVER-IP>:631/printers/
 ```
 
 ***
@@ -88,16 +120,7 @@ For system administrators requiring deeper access or additional functionality:
 To manually inspect files, run diagnostics, or add network tools, execute a shell session:
 
 ```bash
-docker exec -ti cups /bin/sh
-```
-
-**Debugging Network Tools:** To install essential network utilities (like `iputils` and `iproute2`) within the container environment (only requiured for debugging, etc. not required for normal functionality):
-
-*(Run these commands after entering the container shell)*
-```bash
-apk update
-apk add iputils iproute2
-exit # Exit the container shell when done
+docker exec -it cups /bin/sh
 ```
 
 #### Building from Source Code
@@ -116,7 +139,7 @@ docker build --rm --no-cache -t ghcr.io/jelliuk/docker-cups:master .
 *   **Default Credentials:** The initial print server credentials are `root` / `password`. **Always set the `CUPS_ENV_PASSWORD` environment variable to change this password.**
 *   **Updating:** To pull the latest changes or patch versions, simply re-run:
     ```bash
-    docker pull ghcr.io/jelliuk/docker-cups:master
+    docker pull ghcr.io/jelliuk/docker-cups:latest
     ```
 
 ### ⚙️ Technical Specifications & Networking
