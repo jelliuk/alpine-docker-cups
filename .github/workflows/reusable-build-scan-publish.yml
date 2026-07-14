@@ -1,0 +1,230 @@
+name: Reusable - Build, Scan & Publish
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Branch to build and publish'
+        required: true
+        type: string
+      tag_channel:
+        description: "Floating tag to publish alongside sha/date tags (e.g. 'dev' or 'latest')"
+        required: true
+        type: string
+    outputs:
+      digest:
+        description: 'Digest of the published multi-arch image'
+        value: ${{ jobs.build_and_publish.outputs.digest }}
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write         # Required to commit security-findings.md back to the branch
+      packages: write         # Required for package publish
+      id-token: write         # Required for Cosign OIDC keyless signing
+      security-events: write  # Required for Trivy SARIF upload to Security tab
+
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ inputs.ref }}
+
+      # ── Docker setup ─────────────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Image signing setup ───────────────────────────────────────────────────
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      # ── Tag calculation ───────────────────────────────────────────────────────
+      - name: Extract Docker metadata and tags
+        id: meta
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=${{ inputs.tag_channel }}
+            type=raw,value={{date 'YYYY-MM-DD'}}-v${{ github.run_number }}
+
+      # ── Build (scan target — single platform, loaded locally for Trivy) ───────
+      - name: Build image for scanning
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          load: true
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:scan-target
+          platforms: linux/amd64  # local --load only supports single platform
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Trivy scanning ────────────────────────────────────────────────────────
+      # NOTE: Findings are reported (SARIF + job summary + security-findings.md)
+      # but are never allowed to fail the build. Each new build carries whatever
+      # fixes are available upstream at build time; anything still outstanding is
+      # documented and picked up by a future build rather than blocking release.
+      - name: Cache Trivy vulnerability DB
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ github.run_id }}
+          restore-keys: trivy-db-
+
+      # Scan 1: JSON format — used as the reporting source (stable schema, reliable parsing)
+      - name: Scan image — JSON (reporting source)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        with:
+          image-ref: ghcr.io/${{ env.IMAGE_NAME }}:scan-target
+          format: json
+          output: trivy-results.json
+          severity: CRITICAL,HIGH
+          exit-code: '0'       # Informational only — never gates the build
+          ignore-unfixed: true # Only flag vulnerabilities that have a fix available
+          vuln-type: os,library
+          scanners: vuln
+
+      # Scan 2: SARIF format — uploaded to the GitHub Security tab
+      - name: Scan image — SARIF (Security tab)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        with:
+          image-ref: ghcr.io/${{ env.IMAGE_NAME }}:scan-target
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+
+      # Parse JSON output to count findings (informational — no gating)
+      - name: Count vulnerabilities
+        id: check
+        run: |
+          COUNT=$(jq '[.Results[]?.Vulnerabilities // [] | .[]] | length' trivy-results.json)
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          # Category scopes results per branch — prevents merged results
+          # when the workflow runs concurrently across branches
+          category: trivy-container-${{ inputs.ref }}
+
+      # Write a clean Markdown summary to the Action run page
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Trivy container scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`ghcr.io/${{ env.IMAGE_NAME }}:scan-target\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ inputs.ref }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | CRITICAL, HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ignore unfixed | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scope | os, library |" >> $GITHUB_STEP_SUMMARY
+          echo "| Findings | ${{ steps.check.outputs.count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build gated on findings | ❌ No — see security-findings.md |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check.outputs.count }}" = "0" ]; then
+            echo "### ✅ No actionable vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ ${{ steps.check.outputs.count }} actionable vulnerabilities found (non-blocking)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| CVE | Package | Installed | Fixed | Severity |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
+            jq -r '
+              .Results[]? | .Vulnerabilities[]? |
+              "| \(.VulnerabilityID) | \(.PkgName) | \(.InstalledVersion) | \(.FixedVersion // "—") | \(.Severity) |"
+            ' trivy-results.json >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── Persist findings to the repo instead of failing the build ────────────
+      - name: Generate security-findings.md
+        run: |
+          {
+            echo "# Security Findings"
+            echo
+            echo "_Auto-generated by the Reusable - Build, Scan & Publish workflow. Do not edit by hand._"
+            echo
+            echo "This file reflects the Trivy scan of the most recent build published from the"
+            echo "\`${{ inputs.ref }}\` branch. Findings here do **not** block publishing — each build"
+            echo "picks up whatever upstream fixes are available at build time, and anything still"
+            echo "outstanding is tracked here for a future build to resolve."
+            echo
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Branch | \`${{ inputs.ref }}\` |"
+            echo "| Workflow run | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Scanned | $(date -u +'%Y-%m-%d %H:%M UTC') |"
+            echo "| Severity scope | CRITICAL, HIGH (fixable only) |"
+            echo "| Findings count | ${{ steps.check.outputs.count }} |"
+            echo
+            if [ "${{ steps.check.outputs.count }}" = "0" ]; then
+              echo "✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build."
+            else
+              echo "| CVE | Package | Installed | Fixed | Severity |"
+              echo "|---|---|---|---|---|"
+              jq -r '
+                .Results[]? | .Vulnerabilities[]? |
+                "| \(.VulnerabilityID) | \(.PkgName) | \(.InstalledVersion) | \(.FixedVersion // "—") | \(.Severity) |"
+              ' trivy-results.json
+            fi
+          } > security-findings.md
+
+      - name: Commit security-findings.md
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]"
+          file_pattern: security-findings.md
+          branch: ${{ inputs.ref }}
+
+      # ── Build and push (multi-platform) ──────────────────────────────────────
+      - name: Build and push (multi-platform)
+        id: build
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Image signing ─────────────────────────────────────────────────────────
+      - name: Sign image with Cosign (keyless OIDC)
+        run: |
+          cosign sign --yes \
+            ghcr.io/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"

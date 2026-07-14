@@ -1,0 +1,30 @@
+name: Production Build and Publish
+
+on:
+  workflow_run:
+    workflows: ["Development Build and Publish"]
+    types: [completed]
+  workflow_dispatch:  # Manual escape hatch — e.g. re-publishing prod without waiting on dev
+
+concurrency:
+  group: production-build-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Only run when triggered manually, or when Development succeeded.
+    # (Development runs against the 'development' branch, so head_branch is checked
+    # to avoid reacting to ad-hoc dev runs against other refs.)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'development')
+    uses: ./.github/workflows/reusable-build-scan-publish.yml
+    with:
+      ref: master
+      tag_channel: latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      security-events: write
