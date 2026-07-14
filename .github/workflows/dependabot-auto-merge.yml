@@ -1,3 +1,8 @@
+# Enable auto-merge for Dependabot PRs against 'development'. This does NOT
+# merge immediately — 'gh pr merge --auto' just flags the PR to merge itself
+# the moment all REQUIRED checks pass (see the 'PR Validation' workflow and
+# the branch protection rule on 'development' that makes it required).
+# No gating on update-type here: the required checks are the gate.
 name: Dependabot auto-merge
 
 on: pull_request
@@ -19,8 +24,13 @@ jobs:
         uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Enable auto-merge for Dependabot PRs
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+
+      # Optional safety valve: uncomment to still exclude major-version bumps
+      # from auto-merge (they often carry breaking changes worth a human look)
+      # while everything else merges purely on checks passing.
+      # if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+
+      - name: Enable auto-merge
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
