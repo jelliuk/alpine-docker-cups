@@ -30,9 +30,9 @@ for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `master` |
-| Workflow run | [29342899039](https://github.com/jelliuk/docker-cups/actions/runs/29342899039) |
-| Commit | `b487c5144b4fa3cd61045ddd6bb2b13d4f5ee950` |
-| Scanned | 2026-07-14 14:55 UTC |
+| Workflow run | [29344410856](https://github.com/jelliuk/docker-cups/actions/runs/29344410856) |
+| Commit | `de0196a5d87ba3121f101fbabc362ca3745ce4d8` |
+| Scanned | 2026-07-14 15:14 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 0 |
 
