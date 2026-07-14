@@ -27,5 +27,14 @@ for a future build to resolve.
 <!-- SECTION:PRODUCTION:START -->
 ## Production branch (master)
 
-_No scan recorded yet._
+| Field | Value |
+|---|---|
+| Branch | `master` |
+| Workflow run | [29342899039](https://github.com/jelliuk/docker-cups/actions/runs/29342899039) |
+| Commit | `b487c5144b4fa3cd61045ddd6bb2b13d4f5ee950` |
+| Scanned | 2026-07-14 14:55 UTC |
+| Severity scope | CRITICAL, HIGH (fixable only) |
+| Findings count | 0 |
+
+✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build.
 <!-- SECTION:PRODUCTION:END -->
