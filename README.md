@@ -34,14 +34,15 @@ docker compose version
 ```
 
 #### Step 2: Create docker-compose.yml
-Create a docker-compose.yml at the appropriate location within the host machine.
+Create a docker-compose.yml at the appropriate location within the host machine along with respective folders for bind-mounts (volume mounts also a valid option).
 
 ```
 services:
   cups:
-    image: ghcr.io/jelliuk/docker-cups:latest
+    image: ghcr.io/jelliuk/docker-cups:latest # use latest or pin a release
     container_name: cups
     restart: unless-stopped
+    privileged: true # required for USB printers
     ports:
       - "631:631/tcp"
       - "5353:5353/udp"
@@ -49,10 +50,10 @@ services:
       - TZ=Europe/London
       - CUPS_ENV_PASSWORD=change_me!
     volumes:
-      - cups_config:/etc/cups
-
-volumes:
-  cups_config:
+      - /var/run/dbus:/var/run/dbus # required for USB printers
+      - ./config:/etc/cups
+      - ./spool:/var/spool/cups
+      - ./logs:/var/log/cups
 ```
 
 #### Step 3: Start the Service
