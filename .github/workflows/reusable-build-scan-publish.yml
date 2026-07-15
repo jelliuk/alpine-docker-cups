@@ -28,6 +28,7 @@ jobs:
       packages: write         # Required for package publish
       id-token: write         # Required for Cosign OIDC keyless signing
       security-events: write  # Required for Trivy SARIF upload to Security tab
+      pull-requests: write    # Required to open/auto-merge the security-findings.md sync PR
 
     env:
       IMAGE_NAME: ${{ github.repository }}
@@ -272,76 +273,101 @@ jobs:
           } > security-findings.md
           cp security-findings.md /tmp/final-security-findings.md
 
-      - name: Commit & push security-findings.md to own branch (retry-safe)
+      - name: Open/refresh PR to sync security-findings.md into own branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "${{ inputs.ref }}"
-            git reset --hard "origin/${{ inputs.ref }}"
-            cp /tmp/final-security-findings.md security-findings.md
+          TARGET="${{ inputs.ref }}"
+          BOT_BRANCH="bot/security-findings-sync-${TARGET}"
 
-            if git diff --quiet -- security-findings.md; then
-              echo "No changes to commit on ${{ inputs.ref }} (attempt $attempt)."
-              break
-            fi
+          git fetch origin "$TARGET"
+          git checkout -B "$BOT_BRANCH" "origin/$TARGET"
+          cp /tmp/final-security-findings.md security-findings.md
 
-            git add security-findings.md
-            git commit -m "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]"
+          if git diff --quiet -- security-findings.md; then
+            echo "No changes to sync into $TARGET — skipping PR."
+            exit 0
+          fi
 
-            if git push origin "HEAD:${{ inputs.ref }}"; then
-              echo "Pushed to ${{ inputs.ref }} on attempt $attempt."
-              break
-            fi
+          # NOTE: deliberately no [skip ci] here — pr-validation.yml needs to run
+          # on this commit so the PR can satisfy the required build_check status
+          # check and be auto-merged.
+          git add security-findings.md
+          git commit -m "docs(security): update security-findings.md for ${{ github.sha }}"
+          git push origin "HEAD:$BOT_BRANCH" --force
 
-            if [ "$attempt" = "5" ]; then
-              echo "::error::Failed to push security-findings.md to ${{ inputs.ref }} after 5 attempts."
-              exit 1
-            fi
+          EXISTING_PR=$(gh pr list --base "$TARGET" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
-            echo "Push to ${{ inputs.ref }} rejected (stale base) — refetching and retrying..."
-            sleep $((attempt * 3))
-          done
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create \
+              --base "$TARGET" \
+              --head "$BOT_BRANCH" \
+              --title "docs(security): sync security-findings.md ($TARGET)" \
+              --body "Automated security scan results update. Auto-merges once required checks pass."
+          else
+            echo "Reusing existing PR #$EXISTING_PR for $BOT_BRANCH."
+          fi
 
-      - name: Sync security-findings.md to counterpart branch (retry-safe)
+          # The merge commit message carries [skip ci] so the push that lands on
+          # $TARGET from this merge does NOT re-trigger the build/publish workflow
+          # (which only listens for `push`), avoiding a rebuild -> new PR loop.
+          gh pr merge "$BOT_BRANCH" \
+            --squash \
+            --auto \
+            --subject "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]" \
+            --body ""
+
+      - name: Open/refresh PR to sync security-findings.md into counterpart branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           COUNTERPART="${{ steps.section.outputs.counterpart_branch }}"
+          BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git fetch origin "$COUNTERPART"
           git worktree add /tmp/counterpart-checkout "origin/$COUNTERPART"
           cd /tmp/counterpart-checkout
+          git checkout -B "$BOT_BRANCH" "origin/$COUNTERPART"
+          cp /tmp/final-security-findings.md security-findings.md
 
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "$COUNTERPART"
-            git reset --hard "origin/$COUNTERPART"
-            cp /tmp/final-security-findings.md security-findings.md
+          if git diff --quiet -- security-findings.md; then
+            echo "Counterpart branch $COUNTERPART already up to date — nothing to sync."
+            exit 0
+          fi
 
-            if git diff --quiet -- security-findings.md; then
-              echo "Counterpart branch $COUNTERPART already up to date (attempt $attempt) — nothing to sync."
-              break
-            fi
+          # No [skip ci] here either — same reasoning as the own-branch sync: this
+          # commit needs pr-validation.yml to run so build_check can pass.
+          git add security-findings.md
+          git commit -m "docs(security): sync security-findings.md from ${{ inputs.ref }} build"
+          git push origin "HEAD:$BOT_BRANCH" --force
 
-            git add security-findings.md
-            git commit -m "docs(security): sync security-findings.md from ${{ inputs.ref }} build [skip ci]"
+          EXISTING_PR=$(gh pr list --base "$COUNTERPART" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
-            if git push origin "HEAD:$COUNTERPART"; then
-              echo "Synced to $COUNTERPART on attempt $attempt."
-              break
-            fi
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create \
+              --base "$COUNTERPART" \
+              --head "$BOT_BRANCH" \
+              --title "docs(security): sync security-findings.md ($COUNTERPART)" \
+              --body "Automated security scan results, synced from the ${{ inputs.ref }} build. Auto-merges once required checks pass."
+          else
+            echo "Reusing existing PR #$EXISTING_PR for $BOT_BRANCH."
+          fi
 
-            if [ "$attempt" = "5" ]; then
-              echo "::error::Failed to sync security-findings.md to $COUNTERPART after 5 attempts."
-              exit 1
-            fi
-
-            echo "Push to $COUNTERPART rejected (stale base) — refetching and retrying..."
-            sleep $((attempt * 3))
-          done
+          # [skip ci] in the merge commit prevents this landing push from
+          # re-triggering the counterpart branch's build/publish workflow.
+          gh pr merge "$BOT_BRANCH" \
+            --squash \
+            --auto \
+            --subject "docs(security): sync security-findings.md from ${{ inputs.ref }} build [skip ci]" \
+            --body ""
 
       # ── Build and push (multi-platform) ──────────────────────────────────────
       - name: Build and push (multi-platform)

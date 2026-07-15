@@ -3,13 +3,13 @@ FROM debian:trixie-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7
 # Set metadata
 LABEL author="thbe - https://github.com/thbe, jelliuk <https://github.com/jelliuk>"  \
       maintainer="jelliuk - https://github.com/jelliuk" \
-      version="4.0" \
+      version="4.1" \
       description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support" \
       org.opencontainers.image.title="docker-cups" \
       org.opencontainers.image.description="Debian Trixie Slim CUPS print server with AirPrint/Avahi, Samsung ML-1910 and CLP-325 support" \
       org.opencontainers.image.authors="thbe <https://github.com/thbe>, jelliuk <https://github.com/jelliuk>" \
       org.opencontainers.image.source="https://github.com/jelliuk/docker-cups" \
-      org.opencontainers.image.version="4.0" \
+      org.opencontainers.image.version="4.1" \
       org.opencontainers.image.licenses="MIT"
 
 # Set environment
