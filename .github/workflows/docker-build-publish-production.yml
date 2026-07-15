@@ -28,3 +28,4 @@ jobs:
       packages: write
       id-token: write
       security-events: write
+      pull-requests: write  # Required to open/auto-merge the security-findings.md sync PR
