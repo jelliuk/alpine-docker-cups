@@ -27,17 +27,21 @@ development branch updated
         │
         ▼
 Development Build and Publish (schedule / push / dispatch)
-        │  tags image as :dev, publishes, scans, writes security-findings.md
+        │  tags image as :dev, publishes, scans
+        │  opens/auto-merges a PR to sync security-findings.md
         │  (workflow_run trigger, gated on success + head_branch=development)
         ▼
 Production Build and Publish
-        tags image as :latest, publishes, scans, writes security-findings.md
+        tags image as :latest, publishes, scans
+        opens/auto-merges a PR to sync security-findings.md
 ```
 
 `security-findings.md` is written by both Development and Production, and
 each build syncs its own section to the other branch so `development` and
-`master` never diverge on that one file (see the Reusable workflow section
-for the mechanism and its known constraints).
+`master` never diverge on that one file. This sync now goes through a real
+pull request (build_check must pass, same as any other PR) rather than a
+direct push — see the Reusable workflow section for the mechanism and why
+it changed.
 
 ---
 
@@ -104,6 +108,13 @@ exclusion later.
   offers a check in that picker after it's run at least once — see below),
   (3) does `github.repository` in the `if:` condition still match the repo
   name (it's hardcoded).
+- This is no longer the only automated PR/auto-merge flow in the repo: the
+  reusable workflow's `security-findings.md` sync (see below) also opens PRs
+  and calls `gh pr merge --auto` directly (it doesn't go through this
+  workflow — its `if:` condition is scoped to `actor=dependabot[bot]` so it
+  won't fire for the bot's own sync PRs). Both flows depend on the same
+  "Allow auto-merge" repo setting and the same `build_check` required
+  status check, so a change to either setting affects both.
 
 ---
 
@@ -139,6 +150,12 @@ a no-op.
 - If you rename the workflow (`name:`) or the job id (`build_check`), the
   required-check name in branch protection changes too and you must
   re-select it, or protection silently stops enforcing anything.
+- This check now gates two distinct kinds of PR against `development`:
+  Dependabot's dependency-bump PRs, and the reusable workflow's
+  `security-findings.md` sync PRs (branch `bot/security-findings-sync-*`).
+  Both need `build_check` to pass before their respective auto-merge can
+  fire — there's nothing `security-findings.md`-specific in this workflow,
+  it's just an ordinary PR to it.
 
 ---
 
@@ -221,8 +238,12 @@ inputs:
   tag_channel: {type: string, required: true}  # floating tag, e.g. dev|latest
 outputs:
   digest: multi-arch image digest
-permissions_requested: contents:write, packages:write, id-token:write, security-events:write
+permissions_requested: contents:write, packages:write, id-token:write, security-events:write, pull-requests:write
 called_by: [docker-build-publish-development.yml, docker-build-publish-production.yml]
+external_setup_required:
+  - repo setting "Allow auto-merge" enabled (Settings → General)
+  - repo setting "Automatically delete head branches" enabled (recommended,
+    keeps bot/security-findings-sync-* branches from piling up)
 ```
 
 **Purpose.** The single source of truth for build → scan → publish → sign,
@@ -245,8 +266,9 @@ duplicated across two files.
    "Non-blocking security scanning" below).
 6. Count vulnerabilities, write a job summary, upload SARIF.
 7. Generate/sync `security-findings.md` (see "security-findings.md
-   mechanism" below) — commits the file to `inputs.ref` and syncs an
-   identical copy to the counterpart branch.
+   mechanism" below) — opens (or refreshes) a PR carrying the file into
+   `inputs.ref`, and a second PR carrying an identical copy into the
+   counterpart branch, auto-merging both once `build_check` passes.
 8. Build and push the real multi-arch(-capable) image with the computed
    tags.
 9. Sign the pushed digest with Cosign (keyless OIDC).
@@ -266,38 +288,69 @@ pushes that identical file to **both** branches. This keeps `development`
 and `master` byte-identical for this one file, so promoting `development` →
 `master` never produces a merge conflict on it.
 
-**Retry-safe git writes.** Both the "commit to own branch" and "sync to
-counterpart branch" steps use raw git (fetch → hard-reset to the real remote
-tip → reapply the already-generated file → commit → push), retrying up to
-5 times with backoff on a rejected push. This replaced an earlier version
-that used `stefanzweifel/git-auto-commit-action`, which had no retry/rebase
-logic and hard-failed the entire job on any non-fast-forward push.
+**PR-based sync mechanism (current).** Both the "sync into own branch" and
+"sync into counterpart branch" steps push to a *stable, reused* branch name
+(`bot/security-findings-sync-<target-branch>`, force-pushed each run — not a
+fresh branch per run), open a PR from it if one isn't already open, and call
+`gh pr merge --auto --squash`. GitHub merges the PR itself the moment
+`build_check` passes; nothing about this step is required-check-aware beyond
+that.
 
-**Why the retry logic is necessary — incident record.** Development's
-"sync to counterpart" step and Production's own commit step both write to
-`master`. Even with Production gated on Development's success, the two
-workflows had separate `concurrency` groups, so nothing prevented an
-overlapping run (a re-dispatch, a second scheduled Development run, or a
-human pushing directly to `master`) from landing a commit in the multi-minute
-gap between a job's checkout and its push. `git-auto-commit-action` doesn't
-tolerate that; a non-fast-forward push was a hard, unrecoverable failure.
-Fixed by (a) giving Development and Production the *same* concurrency group
-(`docker-cups-build-publish`) so they can't run their git-writing steps
-concurrently, and (b) the fetch/reset/retry loop described above, which
-self-heals if something still lands mid-run (e.g. a genuine human commit)
-instead of failing the job outright.
+**Why this replaced the earlier direct-push approach.** An earlier version
+committed straight to `inputs.ref` and the counterpart branch with raw git
+(fetch → hard-reset → commit → push, retrying up to 5 times with backoff on
+a rejected push). That worked fine as long as neither branch had protection
+blocking direct pushes — but once `development` gained a required
+`build_check` status check, every one of those direct pushes was rejected
+outright with `GH006: Required status check "build_check" is expected`, and
+no amount of retrying fixes "you're not allowed to push here without a
+passing check that can't run on a plain push." Retrying was only ever a
+mitigation for *races* between overlapping Development/Production runs
+(see the shared `concurrency.group` note in the Development workflow's
+section above), not for *protected-branch rejection* — those are different
+failure modes, and only the PR-based flow described above solves the
+second one. The shared concurrency group still matters and hasn't changed:
+it's still what prevents two overlapping runs from generating conflicting
+`security-findings.md` sync PRs against the same branch at once.
+
+**Loop prevention — read this before changing commit messages.** This is
+the part most likely to regress silently, so the reasoning is spelled out
+here in full:
+- The bot's commit *on the sync branch* (`bot/security-findings-sync-*`)
+  deliberately has **no** `[skip ci]`. It needs `pr-validation.yml` to run
+  on it so the PR can earn a passing `build_check` and become eligible for
+  auto-merge. If you add `[skip ci]` here, the PR will sit open forever,
+  unable to satisfy its own required check — a permanently stuck PR that
+  needs manual intervention to close.
+- The **squash-merge commit** that actually lands on `development`/`master`
+  is given `[skip ci]` explicitly, via `--subject` on `gh pr merge --auto`.
+  That merge is a `push` event, and `docker-build-publish-development.yml`
+  listens for exactly that — without `[skip ci]` on the merge commit, that
+  push would re-trigger the full build/publish pipeline, which would
+  generate another `security-findings.md` update, open another PR, merge
+  again, and repeat indefinitely.
+- In short: the *source* commit needs CI to run (to pass the required
+  check); the *merge* commit must not re-trigger CI (to avoid the loop).
+  These are two different commits with two different messages by design —
+  don't collapse them into one `[skip ci]` message, and don't remove
+  `[skip ci]` from the merge subject to "simplify" it.
 
 **Maintenance notes / gotchas.**
-- If `master` (or `development`) ever gains branch protection that blocks
-  *direct* pushes (required PR reviews, no force-pushes, etc.), the retry
-  loop will still fail — retrying doesn't help against "you're not allowed
-  to push here at all." That would require switching this mechanism to a
-  PR-based flow instead of a direct push. Flag this before enabling stricter
-  protection on either branch.
-- `git worktree add` is used for the counterpart-branch write so the job
-  doesn't have to fully re-checkout and lose its build state. If this step
-  is ever refactored, keep the worktree (or an equivalent isolated checkout)
-  rather than switching the primary checkout mid-job.
+- Requires "Allow auto-merge" enabled in Settings → General — without it,
+  `gh pr merge --auto` fails outright rather than queuing the merge.
+  "Automatically delete head branches" is not strictly required (the branch
+  name is reused/force-pushed either way) but keeps the branch list tidy.
+- Each step checks for an already-open PR from its sync branch
+  (`gh pr list --head ... --state open`) before creating a new one, so
+  re-runs of the workflow update the existing PR rather than opening
+  duplicates.
+- `git worktree add` is still used for the counterpart-branch write so the
+  job doesn't have to fully re-checkout and lose its build state. If this
+  step is ever refactored, keep the worktree (or an equivalent isolated
+  checkout) rather than switching the primary checkout mid-job.
+- If `pr-validation.yml`'s job id or workflow name ever changes, remember
+  this affects the sync PRs' ability to merge too, not just Dependabot's —
+  see the note in that workflow's section.
 - The multi-platform build step is currently `linux/amd64` only. If
   arm64 support is added later, the *scanning* build step must stay
   single-platform + `load: true` (Buildx can't `--load` multi-platform
@@ -311,8 +364,13 @@ instead of failing the job outright.
   `master`. Today that's a manual PR/merge. Consider an automated PR (e.g.
   after N successful Development runs, or on a schedule) to close this gap,
   or explicitly document it as an intentional manual gate.
-- **Branch protection on `master`**: if added, the git-write steps in the
-  reusable workflow will need to move to a PR-based flow (see note above).
+- ~~**Branch protection on `master`**: if added, the git-write steps in the
+  reusable workflow will need to move to a PR-based flow.~~ **Done** —
+  `development` now requires `build_check`, and the reusable workflow's
+  `security-findings.md` sync has been moved to the PR-based flow described
+  in that workflow's section. If/when `master` gains the same protection,
+  no further change is needed there — the same mechanism already targets
+  either branch via `inputs.ref` / the counterpart branch.
 - **Multi-arch builds**: add `linux/arm64` to the final push step if you
   need Raspberry Pi / Apple Silicon host support; keep the scan step
   single-platform as noted above.
