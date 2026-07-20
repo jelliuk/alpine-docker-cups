@@ -19,9 +19,9 @@ to provide detailed output below on build status.
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29426338050](https://github.com/jelliuk/docker-cups/actions/runs/29426338050) |
-| Commit | `9621a24526b32f7111761048089915a5ab16009a` |
-| Scanned | 2026-07-15 15:03 UTC |
+| Workflow run | [29713342519](https://github.com/jelliuk/docker-cups/actions/runs/29713342519) |
+| Commit | `bffcd20ed7c2d360917d42fe5dc289fc5d4f2b68` |
+| Scanned | 2026-07-20 03:30 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 0 |
 
