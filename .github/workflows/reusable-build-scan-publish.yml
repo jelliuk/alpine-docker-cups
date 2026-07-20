@@ -37,19 +37,24 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
 
     steps:
-      # ── Checkout ─────────────────────────────────────────────────────────────
-      - name: Checkout code
-        uses: actions/checkout@v7.0.0
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0  # full history — needed to fetch/worktree the counterpart branch later
-
-      # ── GitHub App token (used only by the security-findings.md sync steps) ──
+      # ── GitHub App token (used for checkout, so the security-findings.md ──
+      # ── sync steps can push/PR as the App instead of GITHUB_TOKEN)       ──
       # A dedicated App installation token (not the default GITHUB_TOKEN) is
       # required here: PRs created/updated with GITHUB_TOKEN are subject to
       # GitHub's mandatory "workflow awaiting approval" gate for bot-authored
       # PRs (introduced June 2026), which would stall build_check forever on
       # an unattended run. App-issued tokens are exempt from that gate.
+      #
+      # Generated BEFORE checkout and passed via checkout's own `token:`
+      # input (see actions/checkout README, "Push a commit using the
+      # built-in token") so the App's credential is what checkout persists
+      # from the start. Earlier revisions of this workflow instead tried to
+      # override the token per-command after a default-token checkout, via
+      # git config unsets / -c http.extraheader overrides — that fought
+      # actions/checkout's own persisted-credential mechanism (which as of
+      # v6 lives outside .git/config) and produced duplicate-Authorization-
+      # header failures. Letting checkout do this itself, the way it's
+      # designed to, is the supported path and needs no workarounds.
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -63,6 +68,15 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0  # full history — needed to fetch/worktree the counterpart branch later
+          token: ${{ steps.app-token.outputs.token }}  # persisted for the whole job — the sync
+                                                        # steps' plain git fetch/push then just work
 
       # ── Docker setup ─────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
@@ -291,34 +305,21 @@ jobs:
 
       - name: Open/refresh PR to sync security-findings.md into own branch
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}  # for gh CLI calls below
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
-          # actions/checkout persists its auth as GIT_CONFIG_COUNT / KEY_n / VALUE_n
-          # environment variables and/or by pointing GIT_CONFIG_GLOBAL at a
-          # separate credential file under $RUNNER_TEMP — not .git/config.
-          # `http.extraheader` is a multi-valued key, so adding our own via `-c`
-          # doesn't replace whichever of those checkout used — it appends, and
-          # GitHub rejects the request for sending two Authorization headers
-          # ("Duplicate header"). Neutralizing both possible sources here (step
-          # env overrides whatever checkout set via $GITHUB_ENV) leaves only the
-          # one header we set via -c below.
-          GIT_CONFIG_COUNT: "0"
-          GIT_CONFIG_GLOBAL: "/dev/null"
         run: |
           set -e
-          # See the env: block above for why GIT_CONFIG_COUNT/GIT_CONFIG_GLOBAL
-          # are overridden and why auth is forced via -c below rather than
-          # relying on whatever actions/checkout persisted.
-          APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-
+          # Checkout above already persisted the App's credential (via its
+          # token: input), so plain git fetch/push authenticate as the App
+          # with no further setup — see the note on the checkout step.
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
 
           TARGET="${{ inputs.ref }}"
           BOT_BRANCH="bot/security-findings-sync-${TARGET}"
 
-          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" fetch origin "$TARGET"
+          git fetch origin "$TARGET"
           git checkout -B "$BOT_BRANCH" "origin/$TARGET"
           cp /tmp/final-security-findings.md security-findings.md
 
@@ -332,7 +333,7 @@ jobs:
           # check and be auto-merged.
           git add security-findings.md
           git commit -m "docs(security): update security-findings.md for ${{ github.sha }}"
-          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" push origin "HEAD:$BOT_BRANCH" --force
+          git push origin "HEAD:$BOT_BRANCH" --force
 
           EXISTING_PR=$(gh pr list --base "$TARGET" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
