@@ -350,11 +350,22 @@ jobs:
           # The merge commit message carries [skip ci] so the push that lands on
           # $TARGET from this merge does NOT re-trigger the build/publish workflow
           # (which only listens for `push`), avoiding a rebuild -> new PR loop.
-          gh pr merge "$BOT_BRANCH" \
-            --squash \
-            --auto \
-            --subject "docs(security): update security-findings.md for ${{ github.sha }} [skip ci]" \
-            --body ""
+          #
+          # --auto requires the target branch to have at least one branch
+          # protection rule for GitHub to queue against (enablePullRequestAutoMerge
+          # fails outright otherwise: "Protected branch rules not configured for
+          # this branch"). If $TARGET isn't protected, there's nothing to wait for
+          # anyway, so fall back to merging immediately.
+          MERGE_SUBJECT="docs(security): update security-findings.md for ${{ github.sha }} [skip ci]"
+          if ! gh pr merge "$BOT_BRANCH" --squash --auto --subject "$MERGE_SUBJECT" --body "" 2> /tmp/merge-error.txt; then
+            if grep -q "Protected branch rules not configured" /tmp/merge-error.txt; then
+              echo "No branch protection on $TARGET — merging immediately instead of queuing auto-merge."
+              gh pr merge "$BOT_BRANCH" --squash --subject "$MERGE_SUBJECT" --body ""
+            else
+              cat /tmp/merge-error.txt >&2
+              exit 1
+            fi
+          fi
 
       - name: Open/refresh PR to sync security-findings.md into counterpart branch
         env:
@@ -405,11 +416,22 @@ jobs:
 
           # [skip ci] in the merge commit prevents this landing push from
           # re-triggering the counterpart branch's build/publish workflow.
-          gh pr merge "$BOT_BRANCH" \
-            --squash \
-            --auto \
-            --subject "docs(security): sync security-findings.md from ${{ inputs.ref }} build [skip ci]" \
-            --body ""
+          #
+          # Same fallback as the own-branch step above: --auto needs the target
+          # branch to have branch protection to queue against, which $COUNTERPART
+          # (currently master) doesn't have yet — see "Branch protection on
+          # master" in the Open recommendations section of the pipeline docs.
+          # Without protection there's nothing to wait for, so merge immediately.
+          MERGE_SUBJECT="docs(security): sync security-findings.md from ${{ inputs.ref }} build [skip ci]"
+          if ! gh pr merge "$BOT_BRANCH" --squash --auto --subject "$MERGE_SUBJECT" --body "" 2> /tmp/merge-error.txt; then
+            if grep -q "Protected branch rules not configured" /tmp/merge-error.txt; then
+              echo "No branch protection on $COUNTERPART — merging immediately instead of queuing auto-merge."
+              gh pr merge "$BOT_BRANCH" --squash --subject "$MERGE_SUBJECT" --body ""
+            else
+              cat /tmp/merge-error.txt >&2
+              exit 1
+            fi
+          fi
 
       # ── Build and push (multi-platform) ──────────────────────────────────────
       - name: Build and push (multi-platform)
