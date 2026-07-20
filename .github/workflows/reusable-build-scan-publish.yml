@@ -296,23 +296,25 @@ jobs:
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
         run: |
           set -e
-          # actions/checkout persists GITHUB_TOKEN as an auth header on origin,
-          # and hosted runners can also have a separate credential.helper
-          # configured for github.com. Both can silently override the
-          # x-access-token URL below and re-authenticate as github-actions[bot]
-          # instead of the App — clear all three before proceeding.
-          git config --unset-all "http.https://github.com/.extraheader" || true
-          git config --global --unset-all credential.helper || true
-          git config --local --unset-all credential.helper || true
+          # actions/checkout (current versions) no longer persists its auth
+          # header in .git/config — it injects it via GIT_CONFIG_COUNT /
+          # GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n environment variables plus a
+          # credential file under $RUNNER_TEMP, for the whole job's environment.
+          # Per git's own config precedence, env-injected config OUTRANKS
+          # anything written to .git/config, so `git config --unset-all ...`
+          # cannot remove it and is not a reliable fix on its own.
+          # The one thing that outranks env-injected config is an explicit
+          # `-c` flag on the git command line — so build the App's auth header
+          # ourselves and force it on every git command that talks to origin.
+          APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
 
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
           TARGET="${{ inputs.ref }}"
           BOT_BRANCH="bot/security-findings-sync-${TARGET}"
 
-          git fetch origin "$TARGET"
+          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" fetch origin "$TARGET"
           git checkout -B "$BOT_BRANCH" "origin/$TARGET"
           cp /tmp/final-security-findings.md security-findings.md
 
@@ -326,7 +328,7 @@ jobs:
           # check and be auto-merged.
           git add security-findings.md
           git commit -m "docs(security): update security-findings.md for ${{ github.sha }}"
-          git push origin "HEAD:$BOT_BRANCH" --force
+          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" push origin "HEAD:$BOT_BRANCH" --force
 
           EXISTING_PR=$(gh pr list --base "$TARGET" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
@@ -359,20 +361,18 @@ jobs:
           COUNTERPART="${{ steps.section.outputs.counterpart_branch }}"
           BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
 
-          # Same reasoning as the own-branch sync step: clear the persisted
-          # GITHUB_TOKEN auth header AND any credential.helper before
-          # authenticating as the App instead — either alone can silently
-          # re-authenticate the push as github-actions[bot].
-          git config --unset-all "http.https://github.com/.extraheader" || true
-          git config --global --unset-all credential.helper || true
-          git config --local --unset-all credential.helper || true
+          # Same reasoning as the own-branch sync step: actions/checkout's
+          # persisted auth is env-injected (GIT_CONFIG_COUNT/KEY/VALUE) and
+          # outranks anything written to .git/config, so we force our own
+          # header via an explicit -c flag on every git command that talks
+          # to origin — that's the one thing that outranks env-injected config.
+          APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
 
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
-          git fetch origin "$COUNTERPART"
-          git worktree add /tmp/counterpart-checkout "origin/$COUNTERPART"
+          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" fetch origin "$COUNTERPART"
+          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" worktree add /tmp/counterpart-checkout "origin/$COUNTERPART"
           cd /tmp/counterpart-checkout
           git checkout -B "$BOT_BRANCH" "origin/$COUNTERPART"
           cp /tmp/final-security-findings.md security-findings.md
@@ -386,7 +386,7 @@ jobs:
           # commit needs pr-validation.yml to run so build_check can pass.
           git add security-findings.md
           git commit -m "docs(security): sync security-findings.md from ${{ inputs.ref }} build"
-          git push origin "HEAD:$BOT_BRANCH" --force
+          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" push origin "HEAD:$BOT_BRANCH" --force
 
           EXISTING_PR=$(gh pr list --base "$COUNTERPART" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
