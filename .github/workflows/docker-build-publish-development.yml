@@ -18,8 +18,7 @@ jobs:
       ref: development
       tag_channel: dev
     permissions:
-      contents: write
+      contents: read   # Reduced from write — sync now authenticates as the GitHub App
       packages: write
       id-token: write
       security-events: write
-      pull-requests: write  # Required to open/auto-merge the security-findings.md sync PR
