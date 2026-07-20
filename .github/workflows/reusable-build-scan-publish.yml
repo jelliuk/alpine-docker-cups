@@ -358,25 +358,24 @@ jobs:
 
       - name: Open/refresh PR to sync security-findings.md into counterpart branch
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}  # for gh CLI calls below
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
-          # See note in the own-branch sync step above — same fix, same reason.
-          GIT_CONFIG_COUNT: "0"
-          GIT_CONFIG_GLOBAL: "/dev/null"
         run: |
           set -e
           COUNTERPART="${{ steps.section.outputs.counterpart_branch }}"
           BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
 
-          # See note in the own-branch sync step's env: block above.
-          APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-
+          # As with the own-branch sync step, checkout's persisted App
+          # credential covers this too — including the linked worktree
+          # below, since actions/checkout's includeIf.gitdir config matches
+          # both the main repo path and .git/worktrees/*. No manual header
+          # handling needed; plain git commands authenticate as the App.
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
 
-          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" fetch origin "$COUNTERPART"
-          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" worktree add /tmp/counterpart-checkout "origin/$COUNTERPART"
+          git fetch origin "$COUNTERPART"
+          git worktree add /tmp/counterpart-checkout "origin/$COUNTERPART"
           cd /tmp/counterpart-checkout
           git checkout -B "$BOT_BRANCH" "origin/$COUNTERPART"
           cp /tmp/final-security-findings.md security-findings.md
@@ -390,7 +389,7 @@ jobs:
           # commit needs pr-validation.yml to run so build_check can pass.
           git add security-findings.md
           git commit -m "docs(security): sync security-findings.md from ${{ inputs.ref }} build"
-          git -c http.https://github.com/.extraheader="${APP_AUTH_HEADER}" push origin "HEAD:$BOT_BRANCH" --force
+          git push origin "HEAD:$BOT_BRANCH" --force
 
           EXISTING_PR=$(gh pr list --base "$COUNTERPART" --head "$BOT_BRANCH" --state open --json number -q '.[0].number' || true)
 
