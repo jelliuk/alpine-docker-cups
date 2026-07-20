@@ -294,18 +294,22 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
+          # actions/checkout persists its auth as GIT_CONFIG_COUNT / KEY_n / VALUE_n
+          # environment variables and/or by pointing GIT_CONFIG_GLOBAL at a
+          # separate credential file under $RUNNER_TEMP — not .git/config.
+          # `http.extraheader` is a multi-valued key, so adding our own via `-c`
+          # doesn't replace whichever of those checkout used — it appends, and
+          # GitHub rejects the request for sending two Authorization headers
+          # ("Duplicate header"). Neutralizing both possible sources here (step
+          # env overrides whatever checkout set via $GITHUB_ENV) leaves only the
+          # one header we set via -c below.
+          GIT_CONFIG_COUNT: "0"
+          GIT_CONFIG_GLOBAL: "/dev/null"
         run: |
           set -e
-          # actions/checkout (current versions) no longer persists its auth
-          # header in .git/config — it injects it via GIT_CONFIG_COUNT /
-          # GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n environment variables plus a
-          # credential file under $RUNNER_TEMP, for the whole job's environment.
-          # Per git's own config precedence, env-injected config OUTRANKS
-          # anything written to .git/config, so `git config --unset-all ...`
-          # cannot remove it and is not a reliable fix on its own.
-          # The one thing that outranks env-injected config is an explicit
-          # `-c` flag on the git command line — so build the App's auth header
-          # ourselves and force it on every git command that talks to origin.
+          # See the env: block above for why GIT_CONFIG_COUNT/GIT_CONFIG_GLOBAL
+          # are overridden and why auth is forced via -c below rather than
+          # relying on whatever actions/checkout persisted.
           APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
 
           git config user.name "${APP_SLUG}[bot]"
@@ -356,16 +360,15 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
+          # See note in the own-branch sync step above — same fix, same reason.
+          GIT_CONFIG_COUNT: "0"
+          GIT_CONFIG_GLOBAL: "/dev/null"
         run: |
           set -e
           COUNTERPART="${{ steps.section.outputs.counterpart_branch }}"
           BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
 
-          # Same reasoning as the own-branch sync step: actions/checkout's
-          # persisted auth is env-injected (GIT_CONFIG_COUNT/KEY/VALUE) and
-          # outranks anything written to .git/config, so we force our own
-          # header via an explicit -c flag on every git command that talks
-          # to origin — that's the one thing that outranks env-injected config.
+          # See note in the own-branch sync step's env: block above.
           APP_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
 
           git config user.name "${APP_SLUG}[bot]"
