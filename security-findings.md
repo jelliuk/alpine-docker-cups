@@ -15,9 +15,9 @@ for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29746710586](https://github.com/jelliuk/docker-cups/actions/runs/29746710586) |
-| Commit | `e0e3b123bbdb7870a626d8534e461a32a6d91163` |
-| Scanned | 2026-07-20 13:33 UTC |
+| Workflow run | [29778650415](https://github.com/jelliuk/docker-cups/actions/runs/29778650415) |
+| Commit | `0b9657c4dbf6922d5762898849c452b4d6630794` |
+| Scanned | 2026-07-20 21:04 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 1 |
 
