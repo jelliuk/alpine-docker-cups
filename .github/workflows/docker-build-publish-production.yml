@@ -23,6 +23,7 @@ jobs:
     with:
       ref: master
       tag_channel: latest
+    secrets: inherit  # Required — see note in docker-build-publish-development.yml
     permissions:
       contents: read   # Reduced from write — sync now authenticates as the GitHub App
       packages: write

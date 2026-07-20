@@ -17,6 +17,9 @@ jobs:
     with:
       ref: development
       tag_channel: dev
+    secrets: inherit  # Required — secrets are NOT passed to a called workflow by default,
+                       # even for a same-repo ./... call. Without this, APP_ID/APP_PRIVATE_KEY
+                       # (and GITHUB_TOKEN-derived secrets) are invisible inside the reusable workflow.
     permissions:
       contents: read   # Reduced from write — sync now authenticates as the GitHub App
       packages: write

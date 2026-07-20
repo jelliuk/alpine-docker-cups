@@ -296,9 +296,14 @@ jobs:
           APP_USER_ID: ${{ steps.app-user.outputs.id }}
         run: |
           set -e
-          # actions/checkout persists GITHUB_TOKEN as an auth header on origin;
-          # clear it before switching to the App token, or the two can conflict.
+          # actions/checkout persists GITHUB_TOKEN as an auth header on origin,
+          # and hosted runners can also have a separate credential.helper
+          # configured for github.com. Both can silently override the
+          # x-access-token URL below and re-authenticate as github-actions[bot]
+          # instead of the App — clear all three before proceeding.
           git config --unset-all "http.https://github.com/.extraheader" || true
+          git config --global --unset-all credential.helper || true
+          git config --local --unset-all credential.helper || true
 
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
@@ -355,8 +360,12 @@ jobs:
           BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
 
           # Same reasoning as the own-branch sync step: clear the persisted
-          # GITHUB_TOKEN auth header before authenticating as the App instead.
+          # GITHUB_TOKEN auth header AND any credential.helper before
+          # authenticating as the App instead — either alone can silently
+          # re-authenticate the push as github-actions[bot].
           git config --unset-all "http.https://github.com/.extraheader" || true
+          git config --global --unset-all credential.helper || true
+          git config --local --unset-all credential.helper || true
 
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
