@@ -1,11 +1,11 @@
 name: PR Validation
 
-# Runs on every PR targeting development (Dependabot's target branch).
+# Runs on every PR targeting development and master (Dependabot's target branch).
 # This is the check that GitHub's native auto-merge waits on — see
 # dependabot-auto-merge.yml and the branch protection rule on 'development'.
 on:
   pull_request:
-    branches: [development]
+    branches: [development, master]
 
 permissions:
   contents: read
