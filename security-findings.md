@@ -15,9 +15,9 @@ for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29811375572](https://github.com/jelliuk/docker-cups/actions/runs/29811375572) |
-| Commit | `496946d59158ebd25d5f4707287c6a6e0a87f9f2` |
-| Scanned | 2026-07-21 07:42 UTC |
+| Workflow run | [29811685427](https://github.com/jelliuk/docker-cups/actions/runs/29811685427) |
+| Commit | `c60605503bb96887f008af2f69c460f9eb673d16` |
+| Scanned | 2026-07-21 07:47 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 1 |
 
@@ -32,13 +32,11 @@ for a future build to resolve.
 | Field | Value |
 |---|---|
 | Branch | `master` |
-| Workflow run | [29811482489](https://github.com/jelliuk/docker-cups/actions/runs/29811482489) |
-| Commit | `f07512a8e84b5f26ee31d205666bdd66049ea5ad` |
-| Scanned | 2026-07-21 07:43 UTC |
+| Workflow run | [29344883385](https://github.com/jelliuk/docker-cups/actions/runs/29344883385) |
+| Commit | `e96083291eed907053ac52d1e5ec76ee864e536d` |
+| Scanned | 2026-07-14 15:21 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
-| Findings count | 1 |
+| Findings count | 0 |
 
-| CVE | Package | Installed | Fixed | Severity |
-|---|---|---|---|---|
-| CVE-2026-12912 | libtiff6 | 4.7.0-3+deb13u2 | 4.7.0-3+deb13u3 | HIGH |
+✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build.
 <!-- SECTION:PRODUCTION:END -->
