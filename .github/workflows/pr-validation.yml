@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read  # needed for `gh pr diff --name-only` in the docs-only check below
 
 concurrency:
   group: pr-validation-${{ github.event.pull_request.number }}
@@ -18,15 +19,37 @@ jobs:
   build_check:
     runs-on: ubuntu-latest
     steps:
+      # docs(security) sync PRs touch security-findings.md only — no Dockerfile
+      # or code change to validate. Skip the build/scan for those so this job
+      # stays cheap and fast, while still reporting success (a skipped step
+      # doesn't fail the job) so auto-merge's required check is satisfied.
+      # Kept as `build_check` (job id unchanged) so this doesn't require any
+      # branch protection update — see the pipeline notes for why that matters.
+      - name: Check whether this PR only touches security-findings.md
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
+          if [ "$FILES" = "security-findings.md" ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "Only security-findings.md changed — skipping image build/scan."
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout PR head
+        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/checkout@v7.0.0
 
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.docs_only != 'true'
         uses: docker/setup-buildx-action@v4.2.0
 
       # Build only — no push, no signing. Proves the Dockerfile/base-image
       # bump the PR introduces still builds cleanly before it's allowed to merge.
       - name: Build image
+        if: steps.changes.outputs.docs_only != 'true'
         uses: docker/build-push-action@v7.3.0
         with:
           context: .
@@ -39,6 +62,7 @@ jobs:
       # Non-blocking informational scan, consistent with the rest of the
       # pipeline — reported, never gates. The build step above is the gate.
       - name: Scan image (informational)
+        if: steps.changes.outputs.docs_only != 'true'
         uses: aquasecurity/trivy-action@v0.36.0
         env:
           TRIVY_NO_PROGRESS: "true"

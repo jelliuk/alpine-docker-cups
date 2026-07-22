@@ -1,0 +1,45 @@
+name: Validate Development Build
+
+# Fast, informational-only sanity check after every push to development
+# (Dependabot auto-merges, security-findings.md syncs, or anything else).
+# Confirms the image still builds. This is intentionally NOT a required
+# status check on branch protection — the commit that lands here already
+# passed pr-validation.yml's build_check before merge, so this is just a
+# cheap post-merge confirmation, not a gate.
+#
+# No scan, no signing, no push, no security-findings.md write — those only
+# happen in the scheduled "Development Build and Publish" workflow, so that
+# a burst of same-day Dependabot merges produces one published/scanned image
+# per day rather than one per merge.
+on:
+  push:
+    branches: [development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-development
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      # Build only — no load, no push, no tag. Buildx still runs the full
+      # build and fails the step if anything's broken; the result is simply
+      # discarded rather than exported. cache-from reuses whatever layer
+      # cache pr-validation.yml already populated for this same content, so
+      # this is normally close to instant. No cache-to: this run shouldn't
+      # be the one paying to (re)populate the cache.
+      - name: Build image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          cache-from: type=gha
