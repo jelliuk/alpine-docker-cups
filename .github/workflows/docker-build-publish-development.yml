@@ -2,10 +2,12 @@ name: Development Build and Publish
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight UTC — regular validation of the pipeline
-  push:
-    branches: [development]  # Immediate feedback on merges (incl. Dependabot auto-merges)
-  workflow_dispatch:
+    - cron: '0 0 * * *'  # Daily at midnight UTC — this is now the ONLY thing that
+                          # publishes/scans/signs. Consolidates however many Dependabot
+                          # merges landed that day into a single released image, instead
+                          # of one full publish per merge. Immediate post-merge feedback
+                          # (build-only, no publish) now lives in validate-development.yml.
+  workflow_dispatch:  # Manual escape hatch to publish dev on demand, outside the daily cron
 
 concurrency:
   group: docker-cups-build-publish   # shared with Production — never run git-writing steps concurrently

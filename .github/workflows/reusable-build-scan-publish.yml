@@ -25,7 +25,7 @@ jobs:
 
     permissions:
       contents: read          # Reduced from write — the security-findings.md sync now
-                               # authenticates as the GitHub App below, not this token
+                              # authenticates as the GitHub App below, not this token
       packages: write         # Required for package publish
       id-token: write         # Required for Cosign OIDC keyless signing
       security-events: write  # Required for Trivy SARIF upload to Security tab
@@ -37,24 +37,11 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
 
     steps:
-      # ── GitHub App token (used for checkout, so the security-findings.md ──
-      # ── sync steps can push/PR as the App instead of GITHUB_TOKEN)       ──
-      # A dedicated App installation token (not the default GITHUB_TOKEN) is
-      # required here: PRs created/updated with GITHUB_TOKEN are subject to
-      # GitHub's mandatory "workflow awaiting approval" gate for bot-authored
-      # PRs (introduced June 2026), which would stall build_check forever on
-      # an unattended run. App-issued tokens are exempt from that gate.
-      #
-      # Generated BEFORE checkout and passed via checkout's own `token:`
-      # input (see actions/checkout README, "Push a commit using the
-      # built-in token") so the App's credential is what checkout persists
-      # from the start. Earlier revisions of this workflow instead tried to
-      # override the token per-command after a default-token checkout, via
-      # git config unsets / -c http.extraheader overrides — that fought
-      # actions/checkout's own persisted-credential mechanism (which as of
-      # v6 lives outside .git/config) and produced duplicate-Authorization-
-      # header failures. Letting checkout do this itself, the way it's
-      # designed to, is the supported path and needs no workarounds.
+      # Use a GitHub App installation token for checkout so downstream sync
+      # steps can push/PR as the App instead of GITHUB_TOKEN. App-issued tokens
+      # are exempt from GitHub's bot PR approval gate. Generate it before
+      # checkout and pass it via checkout's `token:` input so checkout persists
+      # the App credential directly, instead of relying on fallback overrides.
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -116,16 +103,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       # ── Trivy scanning ────────────────────────────────────────────────────────
-      # NOTE: Findings are reported (SARIF + job summary + security-findings.md)
-      # but are never allowed to fail the build. Each new build carries whatever
-      # fixes are available upstream at build time; anything still outstanding is
-      # documented and picked up by a future build rather than blocking release.
-      - name: Cache Trivy vulnerability DB
-        uses: actions/cache@v6.1.0
-        with:
-          path: ~/.cache/trivy
-          key: trivy-db-${{ github.run_id }}
-          restore-keys: trivy-db-
+      # Trivy scans report findings (SARIF + job summary + security-findings.md)
+      # The trivy-action handles its own DB caching (default: $GITHUB_WORKSPACE/.cache/trivy).
 
       # Scan 1: JSON format — used as the reporting source (stable schema, reliable parsing)
       - name: Scan image — JSON (reporting source)
@@ -142,7 +121,8 @@ jobs:
           vuln-type: os,library
           scanners: vuln
 
-      # Scan 2: SARIF format — uploaded to the GitHub Security tab
+      # Scan 2: SARIF format — uploaded to the GitHub Security tab.
+      # skip-setup-trivy: true — the Trivy CLI was already installed by the
       - name: Scan image — SARIF (Security tab)
         uses: aquasecurity/trivy-action@v0.36.0
         env:
@@ -156,6 +136,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           scanners: vuln
+          skip-setup-trivy: true
 
       # Parse JSON output to count findings (informational — no gating)
       - name: Count vulnerabilities
@@ -226,10 +207,32 @@ jobs:
             echo "counterpart_heading=Development branch" >> "$GITHUB_OUTPUT"
           fi
 
+      # Fingerprints just the substance of the findings (severity scope, count,
+      # and the vulnerability table itself) — deliberately excluding the
+      # timestamp/run-id/commit metadata below, which changes on every build
+      # regardless of whether the actual findings did. The sync steps further
+      # down compare this fingerprint (not the rendered file text) to decide
+      # whether there's anything real to sync, so an unchanged scan result
+      # no longer produces a new commit/PR on every single build.
       - name: Generate own section
+        id: own
         run: |
+          FINDINGS_HASH=$(
+            {
+              echo "${{ steps.check.outputs.count }}"
+              if [ "${{ steps.check.outputs.count }}" != "0" ]; then
+                jq -r '
+                  .Results[]? | .Vulnerabilities[]? |
+                  "\(.VulnerabilityID)|\(.PkgName)|\(.InstalledVersion)|\(.FixedVersion // "-")|\(.Severity)"
+                ' trivy-results.json | sort
+              fi
+            } | sha256sum | cut -d' ' -f1
+          )
+          echo "hash=${FINDINGS_HASH}" >> "$GITHUB_OUTPUT"
+
           {
             echo "<!-- SECTION:${{ steps.section.outputs.name }}:START -->"
+            echo "<!-- FINDINGS-HASH:${{ steps.section.outputs.name }}:${FINDINGS_HASH} -->"
             echo "## ${{ steps.section.outputs.heading }}"
             echo
             echo "| Field | Value |"
@@ -277,6 +280,24 @@ jobs:
             } > /tmp/counterpart-section.md
           fi
 
+      # The original checkout's security-findings.md hasn't been touched yet at
+      # this point (Compose, below, is the first thing that overwrites it in
+      # this working tree) — so it and the counterpart file just fetched above
+      # both still hold whatever fingerprint each branch last recorded for OUR
+      # own section. The two sync steps further down use these to skip pushing
+      # a commit/PR when the actual findings haven't changed, even though the
+      # rendered section text always differs (timestamp/run-id/commit).
+      - name: Extract previous findings fingerprints
+        id: fingerprints
+        run: |
+          NAME="${{ steps.section.outputs.name }}"
+
+          OWN_PREV=$(grep -m1 -o "FINDINGS-HASH:${NAME}:[a-f0-9]*" security-findings.md 2>/dev/null | cut -d: -f3 || true)
+          echo "own_branch_prev_hash=${OWN_PREV}" >> "$GITHUB_OUTPUT"
+
+          COUNTERPART_PREV=$(grep -m1 -o "FINDINGS-HASH:${NAME}:[a-f0-9]*" /tmp/counterpart-full.md 2>/dev/null | cut -d: -f3 || true)
+          echo "counterpart_branch_prev_hash=${COUNTERPART_PREV}" >> "$GITHUB_OUTPUT"
+
       - name: Compose unified security-findings.md
         run: |
           {
@@ -318,6 +339,17 @@ jobs:
 
           TARGET="${{ inputs.ref }}"
           BOT_BRANCH="bot/security-findings-sync-${TARGET}"
+
+          # Skip entirely if the actual findings haven't changed since the last
+          # build, even though the rendered section (timestamp/run-id/commit)
+          # always differs. This is what stops every single build from opening
+          # a sync PR regardless of whether anything about the scan changed.
+          OWN_PREV_HASH="${{ steps.fingerprints.outputs.own_branch_prev_hash }}"
+          NEW_HASH="${{ steps.own.outputs.hash }}"
+          if [ -n "$OWN_PREV_HASH" ] && [ "$OWN_PREV_HASH" = "$NEW_HASH" ]; then
+            echo "Findings unchanged for $TARGET (hash ${NEW_HASH:0:12}...) — skipping sync PR."
+            exit 0
+          fi
 
           git fetch origin "$TARGET"
           git checkout -B "$BOT_BRANCH" "origin/$TARGET"
@@ -377,6 +409,17 @@ jobs:
           COUNTERPART="${{ steps.section.outputs.counterpart_branch }}"
           BOT_BRANCH="bot/security-findings-sync-${COUNTERPART}"
 
+          # Same fingerprint short-circuit as the own-branch step above, but
+          # compared against what the counterpart branch last recorded for OUR
+          # section (the two can be at different points, e.g. right after a
+          # first-ever build on one side).
+          COUNTERPART_PREV_HASH="${{ steps.fingerprints.outputs.counterpart_branch_prev_hash }}"
+          NEW_HASH="${{ steps.own.outputs.hash }}"
+          if [ -n "$COUNTERPART_PREV_HASH" ] && [ "$COUNTERPART_PREV_HASH" = "$NEW_HASH" ]; then
+            echo "Findings for ${{ steps.section.outputs.name }} unchanged on $COUNTERPART (hash ${NEW_HASH:0:12}...) — skipping sync PR."
+            exit 0
+          fi
+
           # As with the own-branch sync step, checkout's persisted App
           # credential covers this too — including the linked worktree
           # below, since actions/checkout's includeIf.gitdir config matches
@@ -433,8 +476,9 @@ jobs:
             fi
           fi
 
-      # ── Build and push (multi-platform) ──────────────────────────────────────
-      - name: Build and push (multi-platform)
+      # ── Build and push ────────────────────────────────────────────────────────
+      # Single platform (linux/amd64) — matches the scan-target build above.
+      - name: Build and push
         id: build
         uses: docker/build-push-action@v7.3.0
         with:

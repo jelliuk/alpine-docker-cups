@@ -13,12 +13,21 @@ concurrency:
 jobs:
   build:
     # Only run when triggered manually, or when Development succeeded.
-    # (Development runs against the 'development' branch, so head_branch is checked
-    # to avoid reacting to ad-hoc dev runs against other refs.)
+    #
+    # NOTE: we deliberately do NOT check `head_branch == 'development'` here.
+    # docker-build-publish-development.yml's only triggers are now `schedule`
+    # and `workflow_dispatch` (the `push` trigger was removed) — and GitHub
+    # always runs `schedule`-triggered workflows against the repo's DEFAULT
+    # branch (master, here), regardless of the `ref: development` passed into
+    # the reusable workflow's checkout. That means a schedule-triggered dev
+    # run reports head_branch: master, not development — a head_branch check
+    # here would silently stop matching and production would never fire.
+    # Since the dev workflow can now only be triggered deliberately (cron or
+    # manual dispatch), any successful completion of it is a valid reason to
+    # cascade into production; no branch-name filter is needed.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'development')
+      github.event.workflow_run.conclusion == 'success'
     uses: ./.github/workflows/reusable-build-scan-publish.yml
     with:
       ref: master
