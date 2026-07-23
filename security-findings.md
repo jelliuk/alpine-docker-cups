@@ -27,14 +27,15 @@ for a future build to resolve.
 <!-- SECTION:DEVELOPMENT:END -->
 
 <!-- SECTION:PRODUCTION:START -->
+<!-- FINDINGS-HASH:PRODUCTION:7c36bf35f3da1ada9fe2fb23a7749a51e12769c3d1e6d528cc9d5cf325f8290c -->
 ## Production branch (master)
 
 | Field | Value |
 |---|---|
 | Branch | `master` |
-| Workflow run | [29812072685](https://github.com/jelliuk/docker-cups/actions/runs/29812072685) |
-| Commit | `efed215edc7cdf9e5578bc5fd1e5caea99860970` |
-| Scanned | 2026-07-21 07:53 UTC |
+| Workflow run | [29973636935](https://github.com/jelliuk/docker-cups/actions/runs/29973636935) |
+| Commit | `3a4d4dd08eed0583120ad1cceb0d664923265c9a` |
+| Scanned | 2026-07-23 02:09 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 1 |
 
