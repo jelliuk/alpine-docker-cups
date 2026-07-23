@@ -25,13 +25,29 @@ jobs:
       # doesn't fail the job) so auto-merge's required check is satisfied.
       # Kept as `build_check` (job id unchanged) so this doesn't require any
       # branch protection update — see the pipeline notes for why that matters.
+      #
+      # Safeguard: this is purely an optimization, not something that should
+      # ever be able to block a merge. If `gh pr diff` fails for any reason
+      # (git context, API hiccup, rate limit, whatever), fall back to treating
+      # the PR as NOT docs-only — i.e. run the full build/scan, the slower but
+      # always-correct path — instead of letting the job fail outright. A
+      # skipped optimization costs a few extra minutes; a hard failure here
+      # blocks every PR on the repo until someone notices, as just happened.
       - name: Check whether this PR only touches security-findings.md
         id: changes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
-          if [ "$FILES" = "security-findings.md" ]; then
+          set +e
+          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --name-only 2>/tmp/gh-pr-diff.err)
+          GH_EXIT=$?
+          set -e
+
+          if [ $GH_EXIT -ne 0 ]; then
+            echo "::warning::Could not determine changed files for this PR (gh exit $GH_EXIT) — falling back to the full build/scan rather than skipping it."
+            cat /tmp/gh-pr-diff.err
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          elif [ "$FILES" = "security-findings.md" ]; then
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
             echo "Only security-findings.md changed — skipping image build/scan."
           else
