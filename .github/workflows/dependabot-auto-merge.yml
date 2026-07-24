@@ -3,13 +3,14 @@
 # the moment all REQUIRED checks pass (see the 'PR Validation' workflow and
 # the branch protection rule on 'development' that makes it required).
 # No gating on update-type here: the required checks are the gate.
+
 name: Dependabot auto-merge
 
 on: pull_request
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 jobs:
   dependabot:
@@ -30,8 +31,18 @@ jobs:
       # while everything else merges purely on checks passing.
       # if: steps.metadata.outputs.update-type != 'version-update:semver-major'
 
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
       - name: Enable auto-merge
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
