@@ -10,14 +10,15 @@ are available upstream at build time, and anything outstanding is tracked here
 for a future build to resolve.
 
 <!-- SECTION:DEVELOPMENT:START -->
+<!-- FINDINGS-HASH:DEVELOPMENT:7c36bf35f3da1ada9fe2fb23a7749a51e12769c3d1e6d528cc9d5cf325f8290c -->
 ## Development branch
 
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [29886101879](https://github.com/jelliuk/docker-cups/actions/runs/29886101879) |
-| Commit | `0f5fc933629b4e8fb6750338a78af7783d818f75` |
-| Scanned | 2026-07-22 02:33 UTC |
+| Workflow run | [30060615540](https://github.com/jelliuk/docker-cups/actions/runs/30060615540) |
+| Commit | `3e5ff05408cbf76847ccf87bc5f6d21c753ea471` |
+| Scanned | 2026-07-24 02:04 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
 | Findings count | 1 |
 
