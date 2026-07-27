@@ -145,8 +145,8 @@ cat <<EOF
 EOF
 
 ### Start Avahi ###
-# Note: --daemonize implies --syslog; logs captured by Docker via stderr
-/usr/sbin/avahi-daemon --daemonize
+# Note: run in the foreground as a backgrounded shell job to ensure logs are captured, rather than daemonize (docker logs would otherwise only show the parent's stale-PID cleanup, not avahi's own runtime output)
+/usr/sbin/avahi-daemon &
 
 ### Start CUPS (foreground so Docker tracks the process correctly) ###
 exec /usr/sbin/cupsd -f -c /etc/cups/cupsd.conf
