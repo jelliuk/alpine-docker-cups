@@ -10,25 +10,19 @@ are available upstream at build time, and anything outstanding is tracked here
 for a future build to resolve.
 
 <!-- SECTION:DEVELOPMENT:START -->
-<!-- FINDINGS-HASH:DEVELOPMENT:074161dfdc9a9c3260a87a5b5df1f2fe6728814fb8699551d7cc35a0bac9a815 -->
+<!-- FINDINGS-HASH:DEVELOPMENT:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa -->
 ## Development branch
 
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [30728243103](https://github.com/jelliuk/docker-cups/actions/runs/30728243103) |
-| Commit | `79b03c6ad240fbc074c6ee147d75e3b19a53bfa7` |
-| Scanned | 2026-08-02 02:07 UTC |
+| Workflow run | [31231830136](https://github.com/jelliuk/docker-cups/actions/runs/31231830136) |
+| Commit | `8552048e90a69200f89b9391f72fe44ab176dea5` |
+| Scanned | 2026-08-08 01:07 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
-| Findings count | 5 |
+| Findings count | 0 |
 
-| CVE | Package | Installed | Fixed | Severity |
-|---|---|---|---|---|
-| CVE-2025-59375 | libexpat1 | 2.7.1-2 | 2.8.2-1~deb13u1 | HIGH |
-| CVE-2026-25210 | libexpat1 | 2.7.1-2 | 2.8.2-1~deb13u1 | HIGH |
-| CVE-2026-45186 | libexpat1 | 2.7.1-2 | 2.8.2-1~deb13u1 | HIGH |
-| CVE-2026-56408 | libexpat1 | 2.7.1-2 | 2.8.2-1~deb13u1 | HIGH |
-| CVE-2026-12912 | libtiff6 | 4.7.0-3+deb13u2 | 4.7.0-3+deb13u3 | HIGH |
+✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build.
 <!-- SECTION:DEVELOPMENT:END -->
 
 <!-- SECTION:PRODUCTION:START -->
