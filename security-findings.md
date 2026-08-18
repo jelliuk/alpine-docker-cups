@@ -10,19 +10,29 @@ are available upstream at build time, and anything outstanding is tracked here
 for a future build to resolve.
 
 <!-- SECTION:DEVELOPMENT:START -->
-<!-- FINDINGS-HASH:DEVELOPMENT:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa -->
+<!-- FINDINGS-HASH:DEVELOPMENT:37833aee715ec2978cda46f6e3fff978b893d050dd1df3a8c3d796ed78a30a30 -->
 ## Development branch
 
 | Field | Value |
 |---|---|
 | Branch | `development` |
-| Workflow run | [31231830136](https://github.com/jelliuk/docker-cups/actions/runs/31231830136) |
-| Commit | `8552048e90a69200f89b9391f72fe44ab176dea5` |
-| Scanned | 2026-08-08 01:07 UTC |
+| Workflow run | [32086030026](https://github.com/jelliuk/docker-cups/actions/runs/32086030026) |
+| Commit | `687c5005fd760e72c1e4b5913bd65de321382fff` |
+| Scanned | 2026-08-18 00:52 UTC |
 | Severity scope | CRITICAL, HIGH (fixable only) |
-| Findings count | 0 |
+| Findings count | 9 |
 
-✅ No outstanding fixable CRITICAL/HIGH vulnerabilities at time of build.
+| CVE | Package | Installed | Fixed | Severity |
+|---|---|---|---|---|
+| CVE-2026-53615 | bsdutils | 1:2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | libblkid1 | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | liblastlog2-2 | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | libmount1 | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | libsmartcols1 | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | libuuid1 | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | login | 1:4.16.0-2+really2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | mount | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
+| CVE-2026-53615 | util-linux | 2.41-5 | 2.41.5-0+deb13u1 | HIGH |
 <!-- SECTION:DEVELOPMENT:END -->
 
 <!-- SECTION:PRODUCTION:START -->
